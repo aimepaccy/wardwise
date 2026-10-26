@@ -124,6 +124,36 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **Prompt (for Whisper)**: a short hint of expected vocabulary. WardWise sends a generic one (`TRANSCRIBE_HINT` in `providers.py`).
 - **Hallucination**: a model producing text that was never in the input or is not true; Whisper can add whole sentences during silences. Session 5 goes deeper.
 
+### 5a. What are we talking to?
+
+- **AI, machine learning, deep learning** (fundamental): nested like medicine, internal medicine, cardiology. AI is any system doing something we would call smart, including hand-written rules (MYCIN); machine learning finds the rules from examples; deep learning does it with neural networks of many layers.
+- **Training, parameters, inference, in statistics words** (fundamental): fitting a logistic regression is training, its coefficients are parameters (weights), using it on a new patient is inference. Logistic regression is the simplest machine learning.
+- **Neural network**: many small weighted sums wired together in layers, each passing a number on. "Deep" means many layers.
+- **Transformer, attention**: the neural network design behind today's models (2017). Attention lets each word weigh every other word, so "discharge" is read from "pharmacy" or "purulent" around it.
+- **LLM (large language model)** (fundamental): a transformer trained on huge amounts of text to predict the next token. `gpt-oss-120b` has about 120 billion parameters.
+- **Predictive vs generative AI** (fundamental): a number or category out (a sepsis risk score, judged with sensitivity and AUROC) vs new content out (a summary, much harder to judge). Whisper is technically generative.
+- **Pretraining, instruction tuning, preference tuning (RLHF)** (fundamental): reading everything to predict the next word (a knowledgeable autocomplete), then examples of instruction and good answer, then human rankings. Following instructions is a trained habit, not a separate step. Library years, clerkship, consultant feedback.
+- **Open-weight vs closed** (fundamental): the weights file can be downloaded and run anywhere (`gpt-oss`, Qwen, Whisper) vs reachable only through the maker's service (Claude, GPT-5, Gemini). Open-weight is not open source: the training data and recipe usually stay private.
+- **Model vs provider vs app** (fundamental): the weights, whoever runs them for you, the product built on them. Molecule, pharmacy, treatment protocol. WardWise is one app using three models from one provider: `LLM_MODEL`, `TRANSCRIBE_MODEL`, `VISION_MODEL` and `LLM_BASE_URL` in `config.py`.
+- **Model retirement (deprecation)**: providers stop offering old models (Groq retired `llama-3.3-70b-versatile`); calls then fail with 404 `model_not_found`. A risk to monitor.
+- **Token, tokenizer, vocabulary** (fundamental): the chunks a model reads and writes (about 200,000 for `gpt-oss`), chosen by frequency, not meaning. Like medical word roots, but the pieces rarely match the Greek. "the" is 1 token, "hepatosplenomegaly" 7; typos cost extra.
+- **Byte-pair encoding (BPE)**: the usual way to build a vocabulary: start from characters, keep merging the most frequent pairs.
+- **Next-token prediction** (fundamental): the loop behind every answer: read the whole sequence, give a probability to every token, pick one, add it, repeat until an end token or a cap. One full pass per output token, so output is slower and dearer than input.
+- **Context window** (fundamental): the most tokens one call can hold, input and output together. The desk in an exam; about 131,000 for `gpt-oss-120b`.
+- **Rate limit vs quota units** (fundamental): tokens or requests per minute or day on a plan (Groq's 8,000 tokens a minute, the real ceiling in WardWise) vs a service's own per-request currency (YouTube's 10,000 units a day). With tokens and the context window: millilitres, syringe size, dispensing limit, canteen tickets. `check_budget` in `generate.py`.
+- **Token tax**: languages that are rare in training text get cut into more tokens, so they cost more and fit less. Small for one Kinyarwanda sentence with `gpt-oss` (20 tokens vs 18); measure, do not assume.
+- **Sampling, temperature, top-p** (fundamental): choosing one token from the model's ranked "differential". Temperature 0 always takes the top one (greedy decoding); higher temperatures flatten the list; top-p keeps only the top tokens that add up to p. WardWise: 0.3 for writing, 0 for reading photos (`providers.py`).
+- **Deterministic**: same input, same output. LLMs mostly are not; even at temperature 0 long answers can drift. Temperature 0 gives the most likely answer, not a correct one.
+- **`max_tokens`, `finish_reason`** (fundamental): the hard cap on output tokens, and why generation stopped: `stop` (finished) or `length` (cut off). Cut-off JSON is useless, so WardWise treats `length` as a broken answer and tries again.
+- **Reasoning model, reasoning effort, test-time compute**: models trained to write working notes before answering; the thinking is ordinary tokens, counted against `max_tokens` and the rate limit, usually hidden but still charged. Effort sets how long it thinks. WardWise uses `low`.
+- **Chat completions** (fundamental): the standard LLM call, `POST {base_url}/chat/completions`, JSON in (model, messages, settings) and JSON out (the reply, `finish_reason`, token `usage`). An ordinary REST call. `write_json` in `providers.py`.
+- **System, user, assistant roles** (fundamental): standing orders from the developer, this turn's request, the model's earlier replies. Models are trained to weigh the system message more, but it is not a locked door.
+- **Chat template**: how the roles become one token sequence, with marker tokens between messages. Costs tokens even when empty.
+- **Stateless model, conversation history** (fundamental): the model remembers nothing between calls; chat apps resend the whole conversation every turn, so each turn costs more and old turns must eventually be trimmed or summarised. A locum who has never met the patient.
+- **OpenAI-compatible API** (fundamental): OpenAI's request format, accepted by Groq, OpenRouter, Ollama, vLLM and others. A standard requisition form; the data goes wherever `base_url` points, not to OpenAI. Same shape, uneven features (`reasoning_effort`, strict schemas, audio).
+- **Multimodal, base64**: one model taking more than one kind of input (text and an image in one message, `read_handwriting`); base64 writes any bytes as plain letters so a photo fits inside JSON.
+- **RAG (retrieval-augmented generation)**, first meeting: send only the passages relevant to the question instead of all the material every time. Why phase 8 needs it; 5c goes deeper.
+
 ## 6. Storage and data ownership
 
 ## 7. Testing and security
