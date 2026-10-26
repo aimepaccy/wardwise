@@ -48,7 +48,7 @@ Demo build for the dean (branch `demo/dean`, 2026-10-22, an exception to the lea
    6. Storage and data ownership: the phase 7 walkthrough and explain-back.
    7. Testing and security across the layers: stand-ins, unit vs browser tests, why reviews catch what tests miss, secrets, untrusted input, supply chain.
    8. Final check: a mock conversation with a senior engineer about WardWise (also demo rehearsal).
-   The open explain-back items under point 2 below are folded into these sessions. Capstone report (due 26 October) gets the fresh hours; two or three WardWise learning sessions a week until then.
+   The open explain-back items under point 2 below are folded into these sessions. Capstone report submitted on 2026-10-26; the defense deck (late November) gets priority once its prep starts.
    - The Playwright check scripts (study, focus, progress, coverage, edit, race, write, reading, history) live in scratch folders; recreate them in the repo when phase 10 adds end-to-end tests. The study script's tab count had been out of date since phase 6 (fixed).
    - Not done from the phase 7 reviews, on purpose: a forged file reusing the id of a pack not yet imported is skipped as "already here" (the attacker needs your own export); a finished write replaces a pack opened from My packs; a second deletion ends the first one's undo; other open tabs are not told when packs change (they re-read when the drawer opens; a `BroadcastChannel` would fix it).
    - Not done from the review, on purpose: the NCBI `email` parameter (needs a non-personal project address; ask Rugimbana), and sharing one lookup between two students asking for the same new term at once (not needed at demo scale).
