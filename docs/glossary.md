@@ -178,6 +178,24 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **Exception inheritance, exception chaining**: `InvalidOutput` is a kind of `ProviderError`, so code can catch the narrow kind to retry and the broad kind for messages; `raise … from last_error` shows the student plain words and keeps the technical cause for the log.
 - **Log what happened, not what was said**: the retry log records the error type only, never the material or the answer. Logs live longer and are seen by more people than the data.
 
+### 5b. Making it trustworthy (Part 7)
+
+- **Hallucination (better: confabulation)** (fundamental): fluent, confident output not supported by the input or not true. Like a Korsakoff patient filling memory gaps, with no intent and no awareness. Expected behaviour of a plausible-text generator, reduced but never removed by better models, prompts or temperature 0. Five causes: the loop aims for plausible not true; training rewards guessing over "I don't know" (an exam with no negative marking); no going back once a token is written (snowballing); gaps the task asks it to fill; the pull toward the typical ("oxygen" becomes "high-flow oxygen").
+- **Intrinsic vs extrinsic hallucination**: contradicts the source (a card saying insulin comes first when the teacher said fluid) vs adds what the source does not say (potassium doses nobody taught; may even be true).
+- **Faithfulness vs factuality** (fundamental): true to the source vs true about the world. WardWise needs faithfulness first: correct but untaught content still misleads a student who thinks it came from the teacher.
+- **Grounded / traceable**: the item's quote exists in the material (`is_grounded` in `generate.py`). A surrogate marker for faithfulness, like blood pressure for strokes: "not found" means check this one, "found" does not mean correct.
+- **Normalisation**: cleaning text before comparing, like recoding "M", "male", "Male" in SPSS. `_words`: plain characters (NFKC), lower case, clinical symbols kept as words so "< 92%" never matches "> 92%".
+- **Deterministic check**: plain code, same answer every time, free, cannot hallucinate. WardWise verifies with code, not with another AI call.
+- **Coverage, omission** (fundamental): the reverse question, what the session taught that the pack left out (`uncovered`, `passages`). Grounding is like precision, coverage like recall; a pack needs both. Passages of 40 to 80 words; only grounded quotes tick a passage; when in doubt a passage is shown.
+- **Position bias**: models spread correct MCQ answers unevenly and favour positions when judging. A systematic error, so it is designed out by randomisation, as in a trial (`_shuffled`).
+- **Random vs systematic error** (fundamental): noise you detect case by case (hallucinations: the quote check) vs a consistent push you remove by design (position bias: shuffling).
+- **Seed, pseudo-random**: computer randomness comes from a formula; the same seed gives the same sequence. Seeding the shuffle with the question text keeps the order reproducible, so tests are not flaky and bug reports can be replayed.
+- **Flaky test**: a test that passes or fails by chance. Destroys trust in the test suite.
+- **Eval** (fundamental): a fixed set of inputs plus a way to score outputs, rerun after every change of prompt, model or settings. A clinical audit cycle for AI. Results are rates over a set, not one run.
+- **Tests vs evals** (fundamental): tests check our code with a stand-in model, pass or fail (`fake_writer` in `test_generate.py`); evals measure the real model's behaviour as rates. WardWise has 108 tests and only hand-run live checks so far (eval set idea in `docs/ideas.md`).
+- **Code, human and LLM graders; rubric; LLM-as-judge**: deterministic checks (cheap, surrogate only), clinicians with a fixed marking scheme (gold standard, slow; agreement measured with Cohen's kappa), a second model scoring the first (scales, but biased and fallible, so validated against clinician labels first, like a new test against a gold standard).
+- **Benchmark**: a public eval such as MedQA. Passing one measures one narrow thing; it does not make a tool ready for the clinic.
+
 ## 6. Storage and data ownership
 
 ## 7. Testing and security

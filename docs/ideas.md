@@ -62,7 +62,15 @@ Compare what was discussed with a curriculum and show the overall picture, never
 - An institutional view needs content from many students on a server, consent, ethics approval and role-based access; reports opt-in and anonymised.
 - Selection bias: a report only sees what students chose to record, so a "gap" may mean nobody pressed record.
 
+### An eval set for the writer (learning session 5b, 2026-10-28)
+Measure the study packs instead of judging them from single runs: 8 to 10 invented sessions (different topics, a messy Whisper-style transcript, very short notes, one with small talk) and a script that runs the real pipeline and reports the schema-valid rate, the share of items grounded, coverage, retries and tokens. Run before demos and before any change of model, provider or prompt.
+- A clinician reviews a sample with a rubric (faithful to the quote? clinically safe?), ideally two raters with an agreement statistic.
+- An LLM judge for "does this quote support this card?" (the Card A gap) only after checking it against clinician labels.
+- Not now (Rugimbana's call): it needs more expertise and time than the MVP allows. Useful to raise in conversations as the known next step: what WardWise measures today, what it does not, and what a proper evaluation would need.
+
 ## Small technical fixes (found in learning sessions)
 - Make the pack request strict (`extra='forbid'` on `PackRequest`), so a misspelled field fails loudly instead of silently dropping the transcript.
 - Generate the front end's `types.ts` from the server's OpenAPI file, so the two cannot drift apart.
 - Keep a finished job for a short grace period (or until the browser confirms it arrived), so a dropped connection does not lose the pack and show "server restarted" when it did not.
+- The quote check proves a quote exists, not that the item says what the quote says (a card answering "insulin first" with the real quote "the first thing you give is not insulin" passes). Options: an entailment check or a validated LLM judge (see the eval set above); meanwhile the app's wording should keep "found" from reading as "correct".
+- Repeated items are not detected: ten cards on one sentence all pass grounding; only coverage shows the rest was missed.
