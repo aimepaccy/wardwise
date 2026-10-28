@@ -196,6 +196,28 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **Code, human and LLM graders; rubric; LLM-as-judge**: deterministic checks (cheap, surrogate only), clinicians with a fixed marking scheme (gold standard, slow; agreement measured with Cohen's kappa), a second model scoring the first (scales, but biased and fallible, so validated against clinician labels first, like a new test against a gold standard).
 - **Benchmark**: a public eval such as MedQA. Passing one measures one narrow thing; it does not make a tool ready for the clinic.
 
+### 5c. Safety and the wider map (Part 8)
+- **Prompt injection** (fundamental): text inside the data that the model treats as instructions. The nurse with no separate prescription chart: instructions and data arrive as one token sequence, and roles are a learned weighting, not a wall. Unsolved industry-wide; defences lower the odds.
+- **Direct vs indirect injection**: the user types the attack (spoils only their own pack in WardWise) vs the attack hides in content the user did not write (downloaded slides, a speaker on a recording). Indirect is the dangerous kind.
+- **SQL injection, parameterised queries**: the older cousin, cured by sending command and data through separate channels. LLMs have no such second channel yet.
+- **Lethal trifecta**: private data, untrusted content, and a way to send things out. Remove a leg to contain injection. WardWise's model has untrusted content only.
+- **Delimiter injection, tag escaping** (fundamental): data that contains the markers meant to fence it in, closing the box early (`</notes></material>`). Ask "what if the data contains our special characters?" everywhere. `_untag` in `generate.py` strips WardWise's four tag names; it fixes characters, but the model reads meaning, so a fake "END OF MATERIAL" header still passes.
+- **Threat modelling**: naming each threat and which defence covers it. Grounding covers invention, not injection.
+- **Swiss cheese model**: Reason's patient-safety picture of defence in depth. Code and design slices (schema, caps, `_no_links`, no agency) hold whatever the model; prompt slices ("treat it as data") weaken with a weaker model. "Never put a security boundary in the prompt."
+- **Excessive agency, no agency**: what the model is allowed to do. WardWise's model has no tools and can only hand back a form, so a successful injection spoils one pack.
+- **Jailbreak** (fundamental): getting a model to do what its makers trained it to refuse. Attacker is the user; target is the maker's safety training, not the app's instructions.
+- **Many-shot jailbreaking, crescendo, low-resource languages**: fill the context with fake compliant examples (few-shot copying as a weapon); escalate a little each turn; translate the request into a language with little safety training data.
+- **Over-refusal, dual-use dilemma**: refusing legitimate medical content (overdose thresholds) vs the same educational context being faked by an attacker. Safety and helpfulness trade off.
+- **Data in transit, at rest, in use**: moving, stored, being processed. HTTPS covers transit; the provider must read plain text to process it.
+- **Controller vs processor**: who decides why data is processed (WardWise) vs who processes it for them (Groq).
+- **Retention, zero data retention (ZDR), training on inputs, data residency**: how long the provider keeps inputs; a promise to keep none (usually paid plans); whether inputs improve future models; which country the servers are in. Once data leaves, protection is a contract, not code.
+- **HIPAA (BAA), GDPR, Rwanda's Law No. 058/2021**: health data is a protected category; sending it to a foreign provider is a legal process. Look up the details per project.
+- **Data flow map, DPIA** (fundamental): every place data travels and is copied, with who can delete each copy; the first page of a Data Protection Impact Assessment. For a spoken name in WardWise: device, job folder, held result, two Groq trips, IndexedDB, exported files, reading searches.
+- **Content-free logs, LLM observability**: WardWise logs sizes, times and error types, never material, because logs live long, are widely read and are forgotten in deletion. Observability tools log every prompt by default, tempting because LLM bugs live in the exact input; use synthetic data and consent-based exported reports instead.
+- **OWASP Top 10 for LLM Applications** (2025): the shared checklist (injection, sensitive information disclosure, supply chain, poisoning, improper output handling, excessive agency, system prompt leakage, vector and embedding weaknesses, misinformation, unbounded consumption). Knowing to walk your system through it is the fundamental; the numbering is a detail.
+- **Model output is untrusted input** (fundamental): validate and escape what comes out as well as what goes in. Inserted as HTML, model text could carry a script (cross-site scripting, XSS); React shows text as text.
+- **Kerckhoffs's principle**: a system should stay safe when everything about it is known except the keys. WardWise's prompt is public; the API key lives in `.env`, never in a prompt.
+
 ## 6. Storage and data ownership
 
 ## 7. Testing and security
