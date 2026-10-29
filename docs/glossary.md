@@ -218,6 +218,22 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **Model output is untrusted input** (fundamental): validate and escape what comes out as well as what goes in. Inserted as HTML, model text could carry a script (cross-site scripting, XSS); React shows text as text.
 - **Kerckhoffs's principle**: a system should stay safe when everything about it is known except the keys. WardWise's prompt is public; the API key lives in `.env`, never in a prompt.
 
+### 5c. Safety and the wider map (Part 9, embeddings)
+- **Embedding, vector** (fundamental): a list of numbers that works as coordinates for meaning, so texts about the same thing land close together. A pharmacy shelved by therapeutic class, not alphabetically: "heart attack" sits beside "myocardial infarction" with no words in common. The axes are learned in training, not designed, and nobody can read them.
+- **Dimensions, collision**: how many numbers an embedding has (384 in bge-small). With too few axes, different kinds of thing land on one spot (asthma, wheeze, salbutamol, peak flow); every distinction needs room to vary. The exact number is a detail.
+- **Cosine similarity, dot product** (fundamental): do two arrows point the same way? 1 same direction, 0 unrelated. On vectors scaled to length 1 (normalised) it is just the dot product. For centred profiles it equals Pearson's correlation. Read scores as a ranking, not as absolutes: many models squeeze them into a high band (anisotropy, a detail).
+- **Lexical (keyword) search vs semantic search** (fundamental): matching words (`youtube.py`, with hand-made patches for plurals and status asthmaticus) vs matching meaning (embeddings). Lexical misses synonyms; semantic misses exact distinctions.
+- **Embedding model, encoder vs decoder** (fundamental): an encoder reads the whole text in both directions and returns one vector (the BERT family, about 33 million weights for bge-small, runs on a laptop); a decoder writes one token at a time, left to right (the GPT family, the LLM in WardWise). Reading for gist is a far easier job than writing.
+- **Static vs contextual embeddings**: one fixed vector per word (word2vec, 2013; "king − man + woman ≈ queen") vs a vector that depends on the neighbours (transformers, BERT 2018). Attention, in the layers, pulls the same word in different directions; the lookup table always gives the same starting card.
+- **Pooling, CLS token, normalising**: squeezing many token vectors into one for the sentence, by averaging (mean pooling) or by a special token whose job is to absorb the whole sentence (CLS, the chair's summary); then scaling the arrow to length 1. Details.
+- **Contrastive learning, positives and negatives, in-batch negatives** (fundamental): training by an exam of pairs. Pull a question and its true passage together, push the others apart; in a batch of 32 pairs the other 31 answers are free distractors. The source of the pairs (web search, PubMed clicks for MedCPT, image captions for CLIP) shapes what "related" means.
+- **Hard negatives**: plausible distractors (status epilepticus for status asthmaticus), as in a good single-best-answer question. Without them the model never pays for confusing near-misses.
+- **Close is not correct** (fundamental): embeddings learn topic, not truth or logic. Negation and conditions score close to their opposites ("do not start insulin" 0.84 from "start insulin", live). Clinical informatics has fought negation for decades (NegEx, 2001: "no evidence of pneumonia").
+- **Domain-specific embedding models**: trained on medical pairs (MedCPT, from NCBI). Choose any model by testing on your own material, not by reputation.
+- **Embedding inversion** (OWASP LLM08): the original text can be partly rebuilt from its vector, so a vector store of clinical text needs the same protection as the text.
+- **Hugging Face, Spaces, MTEB, safetensors**: the "GitHub for models"; free browser demos; a leaderboard for embedding models; a model file format that cannot run hidden code (older "pickle" files can). A model file is software: known publishers, pinned versions.
+- **Library vs model**: the code that runs a model (`fastembed`, ONNX Runtime) vs the learned weights it loads (`bge-small-en-v1.5`, 65 MB). The analyser vs its calibration.
+
 ## 6. Storage and data ownership
 
 ## 7. Testing and security
