@@ -28,6 +28,14 @@ Personal by default; students can form a group whose packs are pooled, so a stud
 - Pulls against consultant privacy: a group spreads teaching beyond the room. Share packs (teaching points), never audio or transcripts; the consultant's consent sets the level ("for you only" or "for your group"); no teacher named by default.
 - Needs accounts and authorisation (role-based access), so it follows student accounts.
 
+### The platform: a personal space and a shared lobby (agreed as the long-term shape, 2026-11-01)
+Two sides. A personal space for each student (their sessions, packs, chats and organisation), private by default. A common lobby open to every user, divided into rooms by specialty (internal medicine, surgery, paediatrics, and so on). Each room holds packs shared by users at different hospitals, so knowledge from one hospital reaches students at another. Paid extras could sit on top later; not a goal now.
+- Replaces "Groups across sites" as the way to share (Rugimbana, 2026-11-01): one open lobby, no separate user groups. The consent rules from that idea still apply, with stronger checks. Nothing reaches the lobby without the student choosing to publish it and the consultant's consent; only teaching points, never audio or transcripts.
+- Build order: the personal side first, working fully for one user; the lobby and its rooms (structure and look) come after.
+- Publishing needs a check for anything that could identify a patient, a teacher or a placement (automatic first, then a person), and a way to report and remove content.
+- Retrieval over the lobby is RAG in its natural setting: the corpus is too large to send whole (learning session 5c, step 9.2).
+- Follows accounts, groups and a privacy design; the MVP must not make choices that block it.
+
 ### Keep what was taught, not what was said (consultant trust, 2026-10-22)
 Consultants may not want a word-for-word record of what they said. After the pack is written, do not save the transcript; keep the pack with its short checked quotes. Trade-off: the student cannot go back to the transcript, and the chat (phase 8) works from the pack. Together with no stored audio and pausing for off the record, this is the promise to make to consultants.
 
