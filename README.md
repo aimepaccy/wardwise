@@ -1,8 +1,12 @@
 # WardWise
 
-WardWise turns clinical teaching into a study pack. Record a teaching conversation, take photos of your handwritten notes, add the slides, and WardWise gives you a summary, flashcards, an exam-style quiz, a chat about the session, and further reading from credible sources.
+*Every ward round, turned into a lesson.*
 
-**Status:** early development (phase 7 of the plan in `docs/plan.md`). WardWise records or accepts audio, transcribes it with Whisper, reads PDF and PowerPoint slides and photos of handwritten notes, lets you correct what it heard and read, and writes a study pack: an overview, checked teaching points, flashcards, a quiz, and further reading. Every pack is saved in your browser (never on the server), and you can reopen, export and import packs. The chat and feedback come next.
+WardWise turns ward-round teaching into a study pack. Record a teaching round, take photos of your handwritten notes, or add the slides, and about a minute later you have a summary, flashcards, an exam-style quiz and further reading from credible sources. Every teaching point carries a quote that WardWise checks against the session itself.
+
+![A WardWise study pack made from a role-played round on diabetic ketoacidosis](docs/screenshot.png)
+
+**Status:** a working MVP. WardWise records a round or accepts an audio file and transcribes it with Whisper, reads photos of handwritten notes and PDF or PowerPoint slides, lets you correct what it heard and read, and writes the study pack. Packs are saved in your browser, not on the server, and you can reopen, export and import them. Next: hosting behind an access code, then a chat about the session (see `docs/plan.md`).
 
 > WardWise is for teaching material only: role-played rounds, lectures, and your own notes. Do not upload anything that could identify a patient.
 
@@ -10,6 +14,7 @@ WardWise turns clinical teaching into a study pack. Record a teaching conversati
 - **Front end:** React, Tailwind CSS, shadcn/ui, Motion
 - **Back end:** Python, FastAPI
 - **AI:** any OpenAI-compatible provider (Groq by default), set in configuration
+- **Checks:** the AI's reply must match a fixed schema; every teaching point and flashcard quotes the session, and WardWise marks any quote it cannot find. Passages that no item covers are listed, so the student can read what the summary may have missed.
 - **Further reading:** links come from PubMed, StatPearls, Wikipedia, five teaching channels on YouTube, and the search pages of Radiopaedia and MSD Manuals. The AI only suggests search terms; it never writes links.
 
 ## Running it locally
