@@ -248,6 +248,16 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **`finish_reason: tool_calls`**: the same field as "length" and "stop", here meaning "I am waiting for a tool result". The model picks tools by their descriptions, so descriptions are prompt engineering.
 - **Every tool is a permission** (fundamental): read-only search is low risk; a tool that writes or sends hands over agency and can complete the lethal trifecta. Scope tools like access rights.
 
+### 5c. Safety and the wider map (Part 9, agents)
+- **Agent** (fundamental): an ordinary model that has learned to write tool requests, plus code you write around it: tools, a goal, a loop and guardrails. Not a special model; it sits at the app level of model, provider, app. The intern given a goal, not the nurse given one order. A toy one is about 40 lines; Claude Code is a large one.
+- **The agent loop** (fundamental): ask the model, run the tool it asks for, send the result back, repeat until it stops asking or code stops it. Frameworks (OpenAI Agents SDK, LangGraph, Claude Agent SDK) are this loop with extras; details to look up.
+- **Workflow vs agent** (fundamental): in a workflow your code fixes the path (WardWise's pack: one call, validate, check quotes); in an agent the model chooses the path. Use the simplest that works: an agent earns its place only when the steps cannot be known in advance.
+- **Cost of a loop**: a stateless model is resent the whole conversation at every step, so each step costs more than the last (187 to 1,220 tokens) and the total grows roughly with the square of the steps. A 250-token session cost 6,831 tokens as an agent.
+- **Guardrails at the tool boundary** (fundamental): code that checks each tool request before running it (refuse a card whose quote is not in the session) and around the loop (step cap, token cap, code decides "done"). Guardrails interact: a coverage nudge sent the injected line back and so delivered the attack. A cap must say what it cut.
+- **Propose, don't act; human-in-the-loop; least privilege** (fundamental): a tool that drafts for a person to approve instead of saving or sending; give each tool the smallest power that does the job.
+- **Provenance**: showing where each piece of output came from (the session line beside each card). What actually exposed the injected paracetamol card was provenance shown to a human, not a check.
+- **Hook (Claude Code)**: your own script the harness runs before (`PreToolUse`, can block) or after (`PostToolUse`, can send a failure back) one of Claude's tool calls. WardWise's runs the back-end tests after each edit. A permission deny rule is the simpler tool when a call only needs blocking.
+
 ## 6. Storage and data ownership
 
 ## 7. Testing and security
