@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-29
+Last updated: 2026-11-01
 
 ## Status
 Phase 0 (setup) done. Groq key checked and valid; `backend/.env` complete.
@@ -29,7 +29,7 @@ Demo build for the dean (branch `demo/dean`, 2026-10-22, an exception to the lea
 
 ## Next
 0. **Build and learn together** (from 2026-10-22; the learning pause ran 2026-10-13 to 2026-10-22). Aim: a finished MVP, deployable at short notice. Build order, each with preview, walkthrough and explain-back:
-   1. Phase 10 first (hardening and deploy), so a link exists whenever someone asks to try WardWise: access code, per-address rate limits, one write at a time, Content Security Policy, free hosting on its own origin. See the phase 10 carry-overs below.
+   1. Phase 10 first (hardening and deploy), so a link exists whenever someone asks to try WardWise, and in good time before the research day on 20 November 2026 (a likely oral presentation; the capstone defense follows in late November): access code, per-address rate limits, one write at a time, Content Security Policy, free hosting on its own origin. See the phase 10 carry-overs below.
    2. Phase 8, "Ask about my session": the chat answers from the session first, then from the literature through an evidence-source layer (open sources first; OpenEvidence if access comes).
    3. Summaries read aloud (the browser's built-in speech, Web Speech API), then high-yield cards and a weekly digest.
    4. Phase 9, feedback.
@@ -70,7 +70,7 @@ Demo build for the dean (branch `demo/dean`, 2026-10-22, an exception to the lea
 
 - 2026-10-22, the same dean after the demo: very positive, believes it would work. Asked for a one-page concept note (kept outside this repo). New ideas: rename to something that says what it does, like UpToDate (done: WardWise); read the day's summary aloud for students on the move; high-yield cards leading to weekly reports; small talk should not be kept at all, not only left out of the pack; OpenEvidence for the session chat (agreed, see Decisions). Liked simulation-lab use, an admin dashboard and student accounts.
 - 2026-10-22, a senior engineer who runs a global health AI lab: plans to share a WardWise demo with the lab.
-- 2026-11-01, a university innovation lead (first live demo): impressed, sees the idea as original with real potential. Get a domain and hosting sooner rather than later. Uploads could merge into one "add material" area, since slides, notes and photos are all text to read (Rugimbana's counter-thought: WardWise is about the ward, so slides may not belong at all; to decide). Commercial use is possible later (better features for a small price), but not the aim now. Agreed the long-term shape: a platform with a personal space (my sessions, packs and chats) and a shared lobby where students find organised teaching from other sites (see `docs/ideas.md`). Asked for a one-page brief with a screenshot and a flow diagram to show to people he can connect Rugimbana with, and suggested presenting WardWise at a research day.
+- 2026-11-01, a university innovation lead (first live demo): impressed, sees the idea as original with real potential. Get a domain and hosting sooner rather than later. Uploads could merge into one "add material" area, since slides, notes and photos are all text to read (Rugimbana's counter-thought: WardWise is about the ward, so slides may not belong at all; to decide). Commercial use is possible later (better features for a small price), but not the aim now. Agreed the long-term shape: a platform with a personal space (my sessions, packs and chats) and a shared lobby where students find organised teaching from other sites (see `docs/ideas.md`). Asked for a one-page brief with a screenshot and a flow diagram to show to people he can connect Rugimbana with, and suggested presenting WardWise at a research day (20 November 2026, slot not yet confirmed). Lobby clarified the same day: cases shared automatically in the background, chats and follow-ups private.
 
 ## Ideas
 Long-term ideas live in `docs/ideas.md` (accounts, organising packs, reminders, simulation debriefs, small technical fixes). Add or remove freely.
