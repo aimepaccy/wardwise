@@ -234,6 +234,20 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **Hugging Face, Spaces, MTEB, safetensors**: the "GitHub for models"; free browser demos; a leaderboard for embedding models; a model file format that cannot run hidden code (older "pickle" files can). A model file is software: known publishers, pinned versions.
 - **Library vs model**: the code that runs a model (`fastembed`, ONNX Runtime) vs the learned weights it loads (`bge-small-en-v1.5`, 65 MB). The analyser vs its calibration.
 
+### 5c. Safety and the wider map (Part 9, vector search, RAG and tool calling)
+- **Vector search, indexing vs querying** (fundamental): embed every passage once, ahead of time (the index), then at each question embed only the question, compare it by cosine with every stored vector and sort. The index at the back of a textbook. 20 passages took 0.11 s to index and 0.007 s to search.
+- **Top-k retrieval, k-nearest neighbours (k-NN)** (fundamental): keep the k closest passages. Comparing against every passage is brute force, fine up to tens of thousands. Scores are often crowded (0.66 to 0.69 for six passages, live), so the cut-off at k is close to a coin toss.
+- **The retriever is not the LLM** (fundamental): a small embedding model plus plain code chooses the passages; the LLM only reads what it is handed. The hospital library catalogue vs the consultant.
+- **Approximate nearest neighbour (ANN), HNSW, vector database**: fast, almost-best search for millions of vectors, and the stores that hold them (pgvector in Postgres, the database under Supabase; FAISS, Chroma, Pinecone). Details to look up when needed.
+- **RAG, retrieval-augmented generation** (fundamental): retrieve passages, augment the prompt with them, generate the answer. An open-book exam where a librarian chooses which pages you may open: answer quality is capped by retrieval recall.
+- **Retrieval omission vs generation omission** (fundamental): the passage was never sent (RAG top 3 dropped the 3.5 potassium threshold and fluids first) vs it was sent and the model judged it irrelevant (with the whole session, fluids first was still missing). Either way the answer is faithful to its context, incomplete against the session, and the model does not warn you: it cannot flag what it never saw.
+- **Long context vs RAG** (fundamental): "if it fits, send it all; retrieve when it does not". A WardWise session (about 3,600 tokens with instructions) fits a context window of over 100,000, so phase 8 v1 should send the whole session; RAG is the scaling path for all of a student's packs, the lobby and the literature. The cost is resending everything on each question (stateless model, 8,000 tokens a minute on the free tier).
+- **Fixed vs variable cost in tokens**: instructions, tags and the question cost the same on every call; only the passages scale. 3 passages cost 183 tokens, 20 cost 505, not 1,225. About 1.3 to 1.5 tokens per English word.
+- **Relevance vs entailment**: whether a passage is about the question vs whether it says the same thing (does B follow from A?). Embedding similarity measures relevance; the generator, reading the actual words, handles negation and conditions.
+- **Tool calling, function calling** (fundamental): the model is given named tools with input schemas and may reply with a structured request ("run `search_session` with query 'insulin start'"); our code decides whether to run it and sends the result back in a message with the role `tool`. The model never runs anything: a consultant writing an order, the nurse or lab carrying it out. Structured output put to work.
+- **`finish_reason: tool_calls`**: the same field as "length" and "stop", here meaning "I am waiting for a tool result". The model picks tools by their descriptions, so descriptions are prompt engineering.
+- **Every tool is a permission** (fundamental): read-only search is low risk; a tool that writes or sends hands over agency and can complete the lethal trifecta. Scope tools like access rights.
+
 ## 6. Storage and data ownership
 
 ## 7. Testing and security
