@@ -120,7 +120,7 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 
 - **Training vs inference** (fundamental): learning (weights adjusted on huge data, once, costly) vs use (input in, output out, weights unchanged). A printed textbook edition: reading it does not change it. Whisper does not improve from WardWise's recordings.
 - **Weights**: the model's internal numbers, set during training.
-- **Fine-tuning**: a short extra round of training on new data. Would need students' transcripts on a server, so not for WardWise.
+- **Fine-tuning**: a short extra round of training on new data. Would need students' transcripts on a server, so not for WardWise. More in 5c, Part 9 (the three levers).
 - **Prompt (for Whisper)**: a short hint of expected vocabulary. WardWise sends a generic one (`TRANSCRIBE_HINT` in `providers.py`).
 - **Hallucination**: a model producing text that was never in the input or is not true; Whisper can add whole sentences during silences. Session 5 goes deeper.
 
@@ -257,6 +257,20 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **Propose, don't act; human-in-the-loop; least privilege** (fundamental): a tool that drafts for a person to approve instead of saving or sending; give each tool the smallest power that does the job.
 - **Provenance**: showing where each piece of output came from (the session line beside each card). What actually exposed the injected paracetamol card was provenance shown to a human, not a check.
 - **Hook (Claude Code)**: your own script the harness runs before (`PreToolUse`, can block) or after (`PostToolUse`, can send a failure back) one of Claude's tool calls. WardWise's runs the back-end tests after each edit. A permission deny rule is the simpler tool when a call only needs blocking.
+
+### 5c. Safety and the wider map (Part 9, multimodal and the three levers)
+- **How a model reads a picture** (fundamental): the photo is cut into patches (tiles of 14 to 28 pixels); a vision encoder (often a vision transformer, ViT, frequently descended from CLIP) turns each patch into a vector; a projector resizes those to the LLM's token size; the image tokens join the word tokens in one sequence. The output is still text, predicted one token at a time. Bolted on (LLaVA, most open models) vs natively multimodal (Gemini): a detail.
+- **Image tokens**: a picture is paid for by its area, not its content. On Groq's `qwen3.8-27b` every photo cost 1,794 tokens whatever size was sent (2048, 1024 or 512 pixels), because the provider resizes first; about 9 times the text on the page. Measure `usage.prompt_tokens`; don't derive it from patch size.
+- **OCR vs vision LLM**: classic OCR (Tesseract) matches letter shapes and reports only what it sees, weak on handwriting; a vision LLM reads in context, far better on messy writing, but writes the most plausible word where the ink is unclear.
+- **Silent substitution** (fundamental): the failure mode of any conversion from a messy input (photo, audio) to clean text: a plausible wrong reading with no sign of doubt. Seen live: "1.2-2g" read as "1-2g", with no [?], at two of three sizes.
+- **Calibration** (fundamental): whether stated confidence matches how often one is right (70% sure, right 70% of the time). LLMs are poorly calibrated about their own words, so instructions that rely on self-doubt ("add [?] if unclear") are the weakest kind. You can't prompt a model into knowing what it doesn't know.
+- **Laundering through conversion** (fundamental): an error made while turning a photo or recording into text passes every later check, because the checks (`is_grounded`) compare against the wrong copy. Check at the conversion point; nothing after it can tell. The ward version: a pharmacist checking against a mistranscribed drug chart.
+- **Two readings compared by code (ensembling, self-consistency)**: read twice, differently, and flag where the readings disagree. Doesn't rely on either model knowing it's unsure; costs twice the tokens. In the live run the two sizes disagreed on exactly the wrong line.
+- **Prompting vs RAG vs fine-tuning** (fundamental): tell the intern each shift (prompting: changes only the text sent; tasks, rules, format) vs hand them the pages (RAG: changes what it reads now; knowledge that is specific, current, private or must be cited) vs a rotation (fine-tuning: refits the weights; behaviour, style, narrow skills). Prompt first, RAG for knowledge, fine-tune for behaviour, and climb only when the step below has measurably failed. Choose by the kind of gap, not as a fixed ladder.
+- **Why "fine-tune it on our guidelines" is usually wrong**: facts blur (patterns stick better than doses), it can't cite, it goes stale, and it can't forget: trained-in data can leak back out (memorisation) and one person's record can't be removed from the weights.
+- **Dynamic few-shot**: retrieve the few examples most like the task and put them in the prompt. RAG feeding prompting; part of Medprompt; the rung to try before fine-tuning for style.
+- **Medprompt** (2023): GPT-4 with careful prompting alone (chosen examples, step-by-step reasoning, several answers combined) beat the medically tuned Med-PaLM 2 on licensing-exam questions. Evidence that prompting is often underestimated.
+- **LoRA**: a cheap kind of fine-tuning that trains a small add-on instead of all the weights. Detail to look up.
 
 ## 6. Storage and data ownership
 
