@@ -37,6 +37,14 @@ Two sides. A personal space for each student: their packs, chats and follow-ups,
 - Retrieval over the lobby is RAG in its natural setting: the corpus is too large to send whole (learning session 5c, step 9.2).
 - Follows accounts, groups and a privacy design; the MVP must not make choices that block it.
 
+### Real ward rounds (the end goal, restated 2026-11-02)
+WardWise is heading for real ward rounds; role-play is the stage for now. What the separate privacy design would need before any real round is recorded (from learning session 5c, 9.5):
+- Approval: ethics review and the hospital's permission; consent from the consultant and the team, and a way to handle patients' information (consent, or never capturing it).
+- The law: Rwanda's Law No. 058/2021 treats health data as sensitive; a data protection impact assessment; where processing happens, since sending audio to Groq in the US is a cross-border transfer. Free tiers that may train on data are out; a paid provider with a no-retention agreement, an in-country host or a local model (Whisper and open-weight LLMs can run locally) are the candidates.
+- Design: remove identifiers as early as possible (at transcription), keep no audio, keep what was taught rather than what was said (below), pause for off the record.
+- Purpose: stay education. Outputs about teaching points keep WardWise off the medical-device line; outputs used for a specific patient's care would cross it.
+- Evaluation: transcription checked on Rwandan-accented and code-switched speech, scored separately (subgroup analysis).
+
 ### Keep what was taught, not what was said (consultant trust, 2026-10-22)
 Consultants may not want a word-for-word record of what they said. After the pack is written, do not save the transcript; keep the pack with its short checked quotes. Trade-off: the student cannot go back to the transcript, and the chat (phase 8) works from the pack. Together with no stored audio and pausing for off the record, this is the promise to make to consultants.
 

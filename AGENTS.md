@@ -5,12 +5,14 @@
 ## Goal
 WardWise is a web app MVP. A student records a (role-played) ward-round conversation, takes photos of handwritten notes and adds slides (.pptx or PDF). WardWise turns them into a study pack: a summary, flashcards, an exam-style quiz, a chat grounded in the session, and further reading from credible sources.
 
+End goal (restated 2026-11-02): recording real ward rounds. Role-play is the stage for now; real rounds come only after a separate privacy design and approval (see Rules and `docs/ideas.md`).
+
 Two equal aims:
 1. A working, good-looking MVP that Rugimbana can show one-on-one to people who can offer opportunities (a demo and conversation, not a formal pitch).
 2. Rugimbana can explain the whole system to a software developer, convincingly: every layer, every term, and why it was built that way.
 
 ## Build and learn together (from 2026-10-22)
-Building resumed on 2026-10-22, after a pause from 2026-10-13 when the project had moved faster than understanding (aim 2). The aim now is a finished MVP that can be deployed and opened on any device at short notice. Each new feature follows the learning mode below, so understanding keeps pace. Alongside the building, learning sessions continue that follow one click (Generate) through every layer, using WardWise's own code as the textbook. Plan and order in `PROGRESS.md` (Next). Each session:
+Building resumed on 2026-10-22, after a pause from 2026-10-13 when the project had moved faster than understanding (aim 2). The aim now is a finished MVP that can be deployed and opened on any device at short notice. Each new feature follows the learning mode below, so understanding keeps pace. Alongside the building, learning sessions continue that follow one click (Generate) through every layer, using WardWise's own code as the textbook. Plan and order in `PROGRESS.md` (Next). From 2026-11-02 (Rugimbana's call), learning sessions 6 to 8 come first and building resumes after them; sessions return to the style of sessions 1 to 4 (a whole topic per message, thorough), since the small deep steps of session 5 were for the AI layer only. Each session:
 - About 45 to 60 minutes; stop when Rugimbana is tired.
 - Beginner style: everyday analogy, then the term, then the real file in WardWise.
 - Beyond WardWise: each fundamental also gets a short general view (what it is across the industry, where else it shows up, common misunderstandings), so the knowledge is not tied to WardWise (asked for on 2026-10-18).
