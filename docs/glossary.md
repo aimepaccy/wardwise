@@ -272,6 +272,23 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **Medprompt** (2023): GPT-4 with careful prompting alone (chosen examples, step-by-step reasoning, several answers combined) beat the medically tuned Med-PaLM 2 on licensing-exam questions. Evidence that prompting is often underestimated.
 - **LoRA**: a cheap kind of fine-tuning that trains a small add-on instead of all the weights. Detail to look up.
 
+### 5c. Safety and the wider map (Part 9, AI in medicine)
+- **The evidence ladder** (fundamental): benchmark, internal validation (held-out test set), external validation (another site, patients never seen), silent or shadow deployment, prospective trial (outcomes, not accuracy), post-market monitoring. Ask which rung the evidence is from and who ran the study.
+- **Benchmark, contamination**: a standard test such as MedQA; contamination (data leakage) is when the test questions were in the training data, so a score partly measures memory. An AUROC near 1 should suggest leakage, not excellence.
+- **Distribution shift, drift** (fundamental): the population, equipment or charting a model meets differ from what it learned on (a reference range from another population); drift is the same happening over time.
+- **Accuracy vs impact**: an accurate tool can still fail to help. Alert fatigue (alarms usually wrong, so all are ignored) and automation bias (trusting the tool so much that one stops thinking).
+- **AUROC**: the chance the model scores a random patient with the condition above a random patient without it; 0.5 a coin toss, 1 perfect. Epic's sepsis model: 0.76 to 0.83 by the vendor, 0.63 at an independent hospital.
+- **Tests vs evals** (fundamental): software tests check the code works (WardWise's pytest, with stand-ins); evals measure the quality of the model's output across many cases. WardWise has tests and run-time guards, no evals yet.
+- **Rubric, LLM-as-judge** (fundamental): "good" broken into parts, each given a judge matched to its difficulty (code, clinician, validated LLM judge, learners' results). An LLM judge is trusted only after it agrees with clinicians on a sample, measured with Cohen's kappa (agreement beyond chance). HealthBench is the large-scale version.
+- **Bias** (fundamental): errors that fall systematically on the same group, not at random. Random error shrinks with more data; systematic error does not. Mostly selection bias in the training sample, sometimes a biased label (spending used as a measure of need).
+- **Subgroup analysis**: performance reported separately for each group, because an overall average is dominated by the majority and hides a group served worse.
+- **Intended purpose** (fundamental): what the maker says the software is for decides whether it is a medical device; the same code can be a study aid or a device. Foreseeable misuse also counts.
+- **SaMD (Software as a Medical Device)**: software that is itself the device, defined by the IMDRF. Risk sets the class (in the EU, software informing diagnosis or treatment is at least class IIa); US routes 510(k), De Novo, PMA. Details to look up.
+- **CDS transparency**: under the FDA's 2022 guidance, decision support can fall outside device rules partly when the clinician can independently review its basis; the same instinct as showing the quote beside the card.
+- **EU AI Act**: AI in a medical device is high-risk AI, with duties on data quality, bias testing, human oversight and logging; for devices, from August 2027.
+- **Change control, PCCP**: a regulated device is approved as it is, so changing the model is changing the device; a predetermined change control plan says in advance which changes are expected and how each is tested. WardWise's `.env` switch would become a validated change.
+- **Rwanda**: Rwanda FDA regulates medical devices; Law No. 058/2021 on personal data treats health data as sensitive (supervised by NCSA), and sending it abroad (to Groq) is a cross-border transfer; a national AI policy since 2023. Privacy law applies before device law.
+
 ## 6. Storage and data ownership
 
 ## 7. Testing and security

@@ -45,6 +45,13 @@ Packs grouped and filtered by date, week, rotation (medicine, surgery, paediatri
 - Can be built in the browser with what exists now (IndexedDB indexes); no accounts needed.
 - The AI could suggest topic tags when it writes a pack; the student confirms or changes them.
 
+### No repeated content across packs and in the lobby (Rugimbana, learning session 5c, 2026-11-02)
+When asthma comes up on day 1 and again on day 4, the second pack should not repeat cards the student already has; in the lobby, the same point taught at different sites should not appear several times.
+- How: embeddings (learning session 5c, step 9.1). Compare each new card with the student's existing cards; above a similarity threshold it is a likely repeat. Tune the threshold on real examples, since "start insulin" and "do not start insulin" scored 0.84.
+- Repeat content, not repeat topics: meeting asthma again is spaced repetition, which helps memory. Suggested shape: "You already have 6 asthma cards; here are 3 new points from today", with the old cards offered for review, not deleted.
+- In the lobby, merge rather than drop: one card showing it was taught at two sites is corroboration; where sites teach differently, show both, since the difference is itself worth learning.
+- Runs in the browser for personal packs (a small embedding model) or on the server once there are accounts and a lobby.
+
 ### Summaries read aloud (from the dean, 2026-10-22)
 The day's summary read aloud, for a student who is eating or walking. Browsers have speech built in (the Web Speech API), free and on the device, so no text leaves it. Voices vary by device; a downloadable audio file would need a server-side voice later.
 
