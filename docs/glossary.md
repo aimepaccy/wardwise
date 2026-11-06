@@ -291,6 +291,27 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 
 ## 6. Storage and data ownership
 
+- **Server-side vs client-side storage** (fundamental): data kept on a server (the hospital-held record: sync, sharing, backups, but one breach exposes everyone) vs on the user's device (the patient-held record: private, but no sync and easily lost). WardWise packs are client-side.
+- **Local-first software**: data lives on the device first and syncs only if chosen (Obsidian, Apple Health). WardWise is local-first without sync.
+- **Relay vs store** (fundamental): a server that holds data only while working on it (WardWise, WhatsApp until delivery) vs one that keeps the master copy.
+- **Data at rest vs in transit**: sitting in storage vs travelling over the wire; each is protected separately.
+- **Ownership in practice** (fundamental): four questions for every copy: who holds it, who can read it, who can delete it, who answers if it goes wrong.
+- **Browser storage shelves**: cookies (small, sent with every request, mostly for logins; WardWise has none), localStorage (small text, a notepad: `lucy-theme`, `lucy-notes-draft`), sessionStorage (gone when the tab closes), IndexedDB (large objects, a filing cabinet: the `lucy` database), Cache Storage (copies of the site for offline use).
+- **Storage is per origin** (fundamental): each origin has its own cupboard; two apps on one origin (`user.github.io/a` and `/b`) share it, hence WardWise on its own subdomain. Each browser and profile keeps separate storage; a private window starts empty and is wiped on close.
+- **Synchronous vs asynchronous** (fundamental): the page waits (localStorage) vs carries on and gets the answer later as a promise (IndexedDB), like a 202 with a job ID.
+- **Quota, eviction, persistent storage** (fundamental): each origin gets a share of disk; best-effort storage can be wiped without warning when space runs low; `navigator.storage.persist()` asks not to be. Edge and Chrome grant it silently only to well-used sites (`false` on localhost in session 6); Firefox asks. `askToKeepPacks` in `storage.ts`.
+- **Safari's 7-day rule**: Safari deletes a website's script-written storage (IndexedDB too) after 7 days without a visit, unless the site is added to the home screen.
+- **Object store, key, index**: a drawer of records, the field that finds one (`id`), and a sorted view (`by-saved`).
+- **Transaction** (fundamental): a group of writes that succeeds or fails as a whole (an import).
+- **Migration, schema version** (fundamental): converting stored data when its shape changes; data outlives the code that wrote it. `DB_VERSION` for drawers, `format` for records.
+- **put vs add (upsert vs insert)**: save or overwrite vs save only if new. Import uses add, so a backup never overwrites.
+- **Error translation**: technical error to the log, a plain sentence on screen (`QuotaExceededError` becomes "no room left").
+- **Debouncing**: acting once activity stops, not on every event (the notes draft, half a second after typing).
+- **Code splitting**: loading rarely used code only when needed (Zod at the Import click).
+- **Trust does not travel with a file**: a forged export can put an invented quote into its own material too, so the import recheck proves consistency, not truth; the "imported" label is the real defence.
+- **Data subject, controller, processor** (fundamental): the person the data is about; who decides why and how it is processed; who processes on the controller's behalf (Groq, a host). A shared library would make WardWise the controller of stored cases.
+- **Data portability, right to erasure**: take your data with you (Export); have it deleted (Delete, Delete all).
+
 ## 7. Testing and security
 
 - **Never trust the client** (fundamental): checks in the page are a courtesy (quick feedback); checks on the server are the safety, because anyone can send requests without the page. Both exist for the slide limit: `SlideDropZone.tsx` and `routes.py`.
