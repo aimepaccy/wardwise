@@ -22,12 +22,12 @@ Building resumed on 2026-10-22, after a pause from 2026-10-13 when the project h
 - Build order and the learning plan are in `PROGRESS.md` (Next).
 
 ## Learning mode (while building)
-**Walkthrough, with occasional retyping** (agreed 2026-10-10). Every phase follows the same steps, and no phase is skipped:
+**Walkthrough, focused on build quality** (agreed 2026-10-10; retyping dropped and explain-back trimmed on 2026-11-06, Rugimbana's call). Every phase follows the same steps, and no phase is skipped:
 1. **Preview:** what we build, why, the tools and libraries, and the concepts Rugimbana will meet (named explicitly).
 2. **Build:** the AI writes the code.
 3. **Walkthrough:** explain the code and how it works: the flow of a request, what each file does, the key lines, and the vocabulary an engineer would use.
-4. **Retype (limited):** for a concept that is new and central, the AI gives a short piece of code and Rugimbana retypes it. Keep this rare so it does not slow the build.
-5. **Explain-back:** two or three questions; feedback on the answers before moving on.
+4. **Engineer version:** a short paragraph saying what was built the way Rugimbana would explain it to a developer, with every term in it defined.
+5. **Explain-back (light):** at most one question, only when a concept is new and central; brief feedback.
 6. **Close:** Quality review, `LEARNING.md` entry, `PROGRESS.md` update, commit and push.
 
 Also introduce one or two AI-tool features per phase (skills, subagents, MCP servers, hooks) when they fit the work, with a verdict on whether to adopt them.
