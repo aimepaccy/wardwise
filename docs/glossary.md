@@ -314,6 +314,22 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 
 ## 7. Testing and security
 
+- **Test, regression** (fundamental): a small program that runs code with a known input and checks the answer, like the lab's daily QC sample; a regression is something that worked and broke unnoticed.
+- **Unit, integration, end-to-end tests; the test pyramid** (fundamental): one function, several parts together (a real request to the API), the whole app clicked like a user (Playwright); many cheap ones at the base, few slow ones at the top.
+- **Test double (stand-in, fake, mock, stub)** (fundamental): a simulated patient for tests; free, fast, deterministic, can act out failures. `conftest.py` (`fake_transcribe`, `fake_writer`), `fake-indexeddb`. Can drift from the real service (the retired model passed every test).
+- **Test coverage**: the share of lines the tests run; 100% means every line ran, not that it was checked well.
+- **Continuous integration (CI)**: tests run automatically on every push (GitHub Actions). Not set up yet; a phase 10 candidate.
+- **Threat modelling** (fundamental): what are we protecting (assets), from whom and how (threats), what stops them (mitigations).
+- **CIA triad**: confidentiality, integrity, availability; most security problems damage one of them.
+- **Secret rotation**: revoking a leaked key and issuing a new one; deleting the commit is not enough.
+- **Magic bytes**: the opening bytes that identify a file's real type, whatever its name says (`files.py`).
+- **XSS (cross-site scripting)**: sneaking code into a page through data; React shows text as text, which blocks the common form.
+- **Denial of wallet**: abuse that spends someone's paid or free quota; why `/api/packs` needs an access code and rate limits before going public.
+- **Content Security Policy (CSP)**: a header naming the sources a page may load code and data from. Phase 10.
+- **Supply chain attack** (fundamental): compromising a dependency instead of the app (event-stream 2018, xz 2024).
+- **Lockfile, pinning, version ranges**: lockfiles freeze exact installed versions; `"4.6.5"` is a pin, `"^19.2.8"` allows newer compatible versions. `npm audit`, `pip-audit` check for known vulnerabilities.
+- **Least privilege** (fundamental): each part gets only the access it needs (the browser holds no key).
+- **OWASP Top 10**: the standard list of web app risks; a separate OWASP list covers LLM apps.
 - **Never trust the client** (fundamental): checks in the page are a courtesy (quick feedback); checks on the server are the safety, because anyone can send requests without the page. Both exist for the slide limit: `SlideDropZone.tsx` and `routes.py`.
 - **Trust boundary, validate at the boundary** (fundamental): wherever data enters from outside (requests, files, other APIs, AI answers), check it once, strictly, so the inside can trust it. Admission wristbands. Plain type hints and TypeScript types check nothing at run time; Pydantic and Zod do.
 - **Defence in depth** (fundamental): several independent layers, so one mistake is not enough (the response model filter plus never putting keys in job data; three layers of deletion).
