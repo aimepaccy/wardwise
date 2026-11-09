@@ -78,7 +78,7 @@ Record a simulation session (audio, perhaps later video) and get a structured de
 - Every point should point to evidence (a timestamp and a quote) and to the protocol step it relates to, so facilitators can check it.
 - WardWise supports the facilitator's debrief; it does not grade students.
 - Video needs a model that can watch video and is much heavier to process; start with audio.
-- 2026-11-07: a simulation lead suggested a sister product, **SimWise**, that records only the debrief after a simulation (the learners' reflection and the facilitator's short teaching), keeps it, and makes it easy to share between students. Simulation has no real patients, so it avoids the hospital privacy approvals that real ward rounds need, and could serve as working proof of the WardWise approach. Structure not decided (see the chat of 2026-11-07).
+- 2026-11-07: a simulation lead suggested a sister product, **SimWise**, that records only the debrief after a simulation (the learners' reflection and the facilitator's short teaching), keeps it, and makes it easy to share between students. Simulation has no real patients, so it avoids the hospital privacy approvals that real ward rounds need, and could serve as working proof of the WardWise approach. Structure not decided (see the chat of 2026-11-07). 2026-11-09: SimWise waits until later; whether it is a separate fork or integrated with WardWise will be decided then. If it needs scenario cards or scripts, the slide readers removed from WardWise are in git history.
 
 ### Curriculum coverage (secondary, after retrieval)
 Compare what was discussed with a curriculum and show the overall picture, never pointing at a person: for example, internal medicine has 30 topics; 10 were discussed a lot, 3 hardly at all.
