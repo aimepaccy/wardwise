@@ -403,3 +403,12 @@ Preview, plan mode, build, walkthrough. Rugimbana's calls: stay on the free plan
 - **Still imperfect:** the overview once wrote "mmol L-1" despite the rule against index notation; the overview is prose without quotes, so it stays labelled as unchecked.
 - **Tools:** plan mode in Claude Code (read-only planning, approved before any file changed; verdict: worth it for multi-file builds); Playwright with a network stand-in to run a long round through the real app.
 
+## 2026-11-10: Refinements to longer sessions (uniform packs, hidden split)
+Preview, build, walkthrough. Rugimbana's three asks came from reading the app as a student would, not as its builder.
+- **Implementation details stay inside (information hiding):** "part 2 of 3" described how WardWise works, not what the student did, so it confused more than it told. The progress line now says what matters to the student: what is happening and roughly how long is left.
+- **Consistency as a product rule:** a pack sometimes without a quiz is a discrepancy between users. The fix has two layers: try harder where it fails (a retry budget of three for the quiz), then recover in the open (a "Write the quiz" button) rather than quietly hand over less.
+- **Reuse what you already have:** the quiz is written from the pack's own teaching points, which already carry topics and exact quotes, so it takes one call instead of re-reading the session. The server still keeps nothing: the browser sends the points and the session again.
+- **Trust nothing that comes back from the browser:** the server checks each point's quote against the session before writing from it, and checks each question's quote again afterwards.
+- **Optimistic concurrency:** the browser saves the new quiz only if the stored pack still has the same `savedAt`, in one transaction. If the pack was written again or deleted while the quiz was being written, the old quiz is not stitched onto the new pack.
+- **Tools:** the project's PostToolUse hook ran the tests after every edit and flagged the in-between states of a multi-step change (a function called before it was written); a Playwright script that seeded IndexedDB hung because the page had not created its store yet, which is a reminder that test setup must create what it assumes.
+

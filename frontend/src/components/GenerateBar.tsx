@@ -129,7 +129,7 @@ export function GenerateBar({
     if (writeState.status === 'error' && !inputsChanged) return writeState.message
     if (writeState.status === 'writing') {
       return long
-        ? 'A long session: WardWise takes notes on each part first, so this takes a few minutes. Keep this page open.'
+        ? 'A long session: WardWise takes notes on it first, so this takes a few minutes. Keep this page open.'
         : 'Writing usually takes under a minute.'
     }
     if (tooLong && limits) {

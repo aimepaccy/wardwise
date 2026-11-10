@@ -7,23 +7,31 @@ import { Flashcards } from '@/components/pack/Flashcards'
 import { FurtherReading } from '@/components/pack/FurtherReading'
 import { Quiz } from '@/components/pack/Quiz'
 import { Summary } from '@/components/pack/Summary'
+import { WriteQuiz } from '@/components/pack/WriteQuiz'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useReading } from '@/hooks/use-reading'
 import { downloadFile, exportName } from '@/lib/download'
 import { revealPack } from '@/lib/reveal'
 import { exportBlob, type SavedPack } from '@/lib/storage'
+import type { Question } from '@/types'
 
-export type SaveStatus = { status: 'saving' } | { status: 'saved' } | { status: 'failed'; message: string }
+export type SaveStatus =
+  | { status: 'saving' }
+  | { status: 'saved' }
+  | { status: 'failed'; message: string }
+  // The pack is saved, but the quiz written for it later is not.
+  | { status: 'quiz-failed'; message: string }
 
 type PackViewProps = {
   record: SavedPack
   save: SaveStatus
+  onQuizWritten: (record: SavedPack, questions: Question[]) => void
 }
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
-export function PackView({ record, save }: PackViewProps) {
+export function PackView({ record, save, onQuizWritten }: PackViewProps) {
   const { pack } = record
   const [tab, setTab] = useState('summary')
   const reading = useReading()
@@ -47,7 +55,8 @@ export function PackView({ record, save }: PackViewProps) {
   const tabs = [
     { value: 'summary', label: 'Summary', icon: NotebookText, count: null },
     { value: 'cards', label: 'Flashcards', icon: Layers, count: pack.flashcards.length },
-    { value: 'quiz', label: 'Quiz', icon: ListChecks, count: pack.questions.length },
+    // Never disabled: a pack without a quiz offers to write one.
+    { value: 'quiz', label: 'Quiz', icon: ListChecks, count: pack.questions.length || null },
     { value: 'reading', label: 'Reading', icon: Library, count: pack.search_terms.length },
   ]
 
@@ -78,11 +87,12 @@ export function PackView({ record, save }: PackViewProps) {
           </Tooltip>
         }
       >
-        {save.status === 'failed' && (
+        {(save.status === 'failed' || save.status === 'quiz-failed') && (
           <p role="alert" className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
             <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
             <span>
-              This pack is not saved. {save.message} Export it now to keep a copy.
+              {save.status === 'failed' ? 'This pack is not saved.' : 'The pack is saved, but its new quiz is not.'} {save.message}{' '}
+              Export it now to keep a copy.
             </span>
           </p>
         )}
@@ -110,18 +120,20 @@ export function PackView({ record, save }: PackViewProps) {
             </Tabs.Content>
 
             {/* Kept mounted while hidden, so switching tabs does not lose the place in the cards or the quiz.
-                Left out entirely when empty: thin material can give no cards or no questions. */}
+                Cards and reading are left out when empty (thin material can give none); the quiz never is. */}
             {pack.flashcards.length > 0 && (
               <Tabs.Content value="cards" forceMount className="outline-none data-[state=inactive]:hidden">
                 <Flashcards cards={pack.flashcards} />
               </Tabs.Content>
             )}
 
-            {pack.questions.length > 0 && (
-              <Tabs.Content value="quiz" forceMount className="outline-none data-[state=inactive]:hidden">
+            <Tabs.Content value="quiz" forceMount className="outline-none data-[state=inactive]:hidden">
+              {pack.questions.length > 0 ? (
                 <Quiz questions={pack.questions} />
-              </Tabs.Content>
-            )}
+              ) : (
+                <WriteQuiz record={record} onWritten={(questions) => onQuizWritten(record, questions)} />
+              )}
+            </Tabs.Content>
 
             {pack.search_terms.length > 0 && (
               <Tabs.Content value="reading" forceMount className="outline-none data-[state=inactive]:hidden">

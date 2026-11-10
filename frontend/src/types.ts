@@ -96,6 +96,8 @@ export type JobState = {
   step: string
   materials: Materials | null
   pack: StudyPack | null
+  // A quiz written on its own, for a pack that came without one.
+  questions: Question[] | null
   error: string | null
 }
 

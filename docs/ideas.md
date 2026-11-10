@@ -87,6 +87,9 @@ Compare what was discussed with a curriculum and show the overall picture, never
 - An institutional view needs content from many students on a server, consent, ethics approval and role-based access; reports opt-in and anonymised.
 - Selection bias: a report only sees what students chose to record, so a "gap" may mean nobody pressed record.
 
+### Show where in the session an item comes from (Rugimbana, 2026-11-10)
+Beside each quote, a hint of where it was said, without any sign of how WardWise splits the session. A rough "early, middle or late in the session" from the quote's word position is possible now. Minutes ("about 12 minutes in") need timings from transcription, which WardWise does not ask Whisper for yet (`response_format='verbose_json'` gives segment times).
+
 ### An eval set for the writer (learning session 5b, 2026-10-28)
 Measure the study packs instead of judging them from single runs: 8 to 10 invented sessions (different topics, a messy Whisper-style transcript, very short notes, one with small talk) and a script that runs the real pipeline and reports the schema-valid rate, the share of items grounded, coverage, retries and tokens. Run before demos and before any change of model, provider or prompt.
 - A clinician reviews a sample with a rubric (faithful to the quote? clinically safe?), ideally two raters with an agreement statistic.

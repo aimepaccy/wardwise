@@ -59,7 +59,7 @@ def _translate(error: openai.APIError, service: str) -> ProviderError:
     if isinstance(error, openai.RateLimitError):
         # WardWise keeps to the per-minute allowance itself, so a refusal is often the daily one.
         if 'per day' in str(error.message).lower():
-            return ProviderError(f"WardWise has used today's free allowance for the {service} service. Please try again later.")
+            return ProviderError(f"WardWise has used today's AI allowance for the {service} service. Please try again later.")
         return ProviderError(f'The {service} service is busy. Please try again in a minute.')
     if isinstance(error, (openai.APIConnectionError, openai.APITimeoutError)):
         return ProviderError(f'WardWise could not reach the {service} service. Please try again.')

@@ -25,6 +25,7 @@ from app.schemas import (
     PackJobCreated,
     PackRequest,
     PhotoReceipt,
+    QuizRequest,
     Reading,
     SessionReceipt,
 )
@@ -130,6 +131,15 @@ def write_pack(request: PackRequest, background: BackgroundTasks) -> PackJobCrea
         ) from error
     job_id = jobs.create()
     background.add_task(jobs.write, job_id, request)
+    return PackJobCreated(job_id=job_id)
+
+
+# For a pack that came without a quiz. The browser sends the pack's teaching points and the session they came
+# from, since the server kept neither; the session is only searched for quotes, not sent to the AI.
+@router.post('/quizzes', status_code=202)
+def write_quiz(request: QuizRequest, background: BackgroundTasks) -> PackJobCreated:
+    job_id = jobs.create()
+    background.add_task(jobs.write_quiz, job_id, request)
     return PackJobCreated(job_id=job_id)
 
 

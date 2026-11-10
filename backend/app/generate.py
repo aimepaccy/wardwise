@@ -31,6 +31,7 @@ from app.schemas import (
     PackRequest,
     Question,
     QuizDraft,
+    QuizRequest,
     StudyPack,
     TeachingPoint,
 )
@@ -74,6 +75,10 @@ MIN_TAIL_WORDS = 12
 LETTERS = 'ABCDE'
 
 MAX_SUMMARY_POINTS = 15
+# The quiz gets one try more than the rest: a pack without one would differ from every other pack.
+QUIZ_TRIES = 3
+# For points in packs written before topics existed.
+FALLBACK_TOPIC = 'This session'
 
 
 @dataclass(frozen=True)
@@ -218,6 +223,12 @@ _FROM_POINTS = f"""The session was long, so it was first condensed into numbered
 matters in brackets (stressed, repeated, safety, exam) if anything, the point, then a quote copied from the \
 session. {_DATA_ONLY}"""
 
+# A quiz written later for a pack that has none: from the pack's own teaching points, which already hold the
+# session's key teaching with exact quotes, so the session is not read again.
+_FROM_PACK = f"""The session's key teaching points are numbered, between <material> tags. Each line is one \
+point, in the order taught: its number, the topic in square brackets, the point, then a quote copied from the \
+session. {_DATA_ONLY}"""
+
 _POINTS_RULES = f"""- Keep to each topic's number. If a topic's notes cannot support its number, write fewer \
 for it rather than repeat an idea. Within a topic, points marked stressed, safety, exam or repeated come first.
 - One item per idea: merge points that say the same thing.
@@ -255,12 +266,12 @@ Rules:
 """
 
 
-def quiz_instructions(caps: Caps, points: list[CondensedPoint]) -> str:
+def quiz_instructions(caps: Caps, points: list[CondensedPoint], source: str = _FROM_POINTS) -> str:
     """The second call: the quiz, shared across the topics the same way."""
     questions = share(caps.questions, points)
     return f"""You write exam questions for medical students from their own teaching session.
 
-{_FROM_POINTS}
+{source}
 
 Write {sum(questions.values())} questions, this many for each topic: {_shares(questions)}. They are {_QUESTIONS}
 
@@ -321,6 +332,11 @@ def max_chars() -> int:
 
 def max_words() -> int:
     return max_chars() // CHARS_PER_WORD
+
+
+def quiz_fits(points: list[CondensedPoint]) -> bool:
+    """The points a quiz is written from must fit in one call, like any short session."""
+    return len(notes_material(points)) <= quick_chars()
 
 
 def check_budget(material: str) -> None:
@@ -488,19 +504,7 @@ def check(draft: PackDraft, material: str, request: PackRequest, caps: Caps) -> 
         )
         for card in draft.flashcards[: caps.flashcards]
     ]
-    questions = []
-    # A question without exactly five options cannot be a single best answer question; it is left out.
-    for question in [q for q in draft.questions if len(q.options) == 5][: caps.questions]:
-        options, answer = _shuffled(question)
-        questions.append(
-            CheckedQuestion(
-                stem=_no_links(question.stem),
-                options=[Option(text=_no_links(o.text), explanation=_no_links(o.explanation)) for o in options],
-                answer=answer,
-                quote=question.quote,
-                grounded=is_grounded(question.quote, material),
-            )
-        )
+    questions = check_questions(draft.questions, material, caps)
     summary = [
         CheckedPoint(
             topic=_no_links(point.topic).strip(),
@@ -523,6 +527,23 @@ def check(draft: PackDraft, material: str, request: PackRequest, caps: Caps) -> 
         passage_count=passage_count,
         model=get_settings().llm_model,
     )
+
+
+def check_questions(questions: list[Question], material: str, caps: Caps) -> list[CheckedQuestion]:
+    """A question without exactly five options cannot be a single best answer question; it is left out."""
+    checked = []
+    for question in [q for q in questions if len(q.options) == 5][: caps.questions]:
+        options, answer = _shuffled(question)
+        checked.append(
+            CheckedQuestion(
+                stem=_no_links(question.stem),
+                options=[Option(text=_no_links(o.text), explanation=_no_links(o.explanation)) for o in options],
+                answer=answer,
+                quote=question.quote,
+                grounded=is_grounded(question.quote, material),
+            )
+        )
+    return checked
 
 
 def split_parts(request: PackRequest) -> list[PackRequest]:
@@ -601,10 +622,10 @@ def notes_material(points: list[CondensedPoint]) -> str:
     return '<material>\n<points>\n' + '\n'.join(lines) + '\n</points>\n</material>'
 
 
-def from_notes(body: PackBodyDraft, quiz: list[NotedQuestion], points: list[CondensedPoint]) -> PackDraft:
-    """The writer named each item's note by number; here each gets that note's exact quote. A number that
-    names no note, or a note on another topic (a slip of the number), gets no quote, so the check marks the
-    item as not found rather than vouch for it with a quote that does not support it."""
+def _quoter(points: list[CondensedPoint]) -> Callable[[int, str], str]:
+    """The writer names each item's note by number; this gives that note's exact quote. A number that names
+    no note, or a note on another topic (a slip of the number), gets no quote, so the check marks the item
+    as not found rather than vouch for it with a quote that does not support it."""
 
     def quote(number: int, topic: str) -> str:
         if not 1 <= number <= len(points):
@@ -612,14 +633,22 @@ def from_notes(body: PackBodyDraft, quiz: list[NotedQuestion], points: list[Cond
         note = points[number - 1]
         return note.quote if note.topic.strip().casefold() == topic.strip().casefold() else ''
 
+    return quote
+
+
+def questions_from_notes(quiz: list[NotedQuestion], points: list[CondensedPoint]) -> list[Question]:
+    quote = _quoter(points)
+    return [Question(stem=q.stem, options=q.options, answer=q.answer, quote=quote(q.point, q.topic)) for q in quiz]
+
+
+def from_notes(body: PackBodyDraft, quiz: list[NotedQuestion], points: list[CondensedPoint]) -> PackDraft:
+    quote = _quoter(points)
     return PackDraft(
         title=body.title,
         overview=body.overview,
         summary=[TeachingPoint(topic=p.topic, text=p.text, quote=quote(p.point, p.topic)) for p in body.summary],
         flashcards=[Flashcard(front=c.front, back=c.back, quote=quote(c.point, c.topic)) for c in body.flashcards],
-        questions=[
-            Question(stem=q.stem, options=q.options, answer=q.answer, quote=quote(q.point, q.topic)) for q in quiz
-        ],
+        questions=questions_from_notes(quiz, points),
         search_terms=body.search_terms,
     )
 
@@ -668,14 +697,14 @@ def tidy_points(points: list[CondensedPoint], part_of: list[int] | None = None) 
 
 
 def _waiting(label: str, on_step: Callable[[str], None]) -> Callable[[int], None]:
-    """What the student sees while WardWise waits for the free allowance, then the step again."""
-    return lambda seconds: on_step(f'{label} (waiting about {seconds} s for the free AI allowance)' if seconds else label)
+    """What the student sees while WardWise waits its turn for the AI allowance, then the step again."""
+    return lambda seconds: on_step(f'{label} (next turn in about {seconds} s)' if seconds else label)
 
 
-def _twice[T](make: Callable[[], T], what: str) -> T:
-    """Two tries: the AI sometimes breaks the form, and a second try usually works."""
+def _tries[T](make: Callable[[], T], what: str, tries: int = 2, failure: str = 'a usable study pack') -> T:
+    """More than one try: the AI sometimes breaks the form, and another try usually works."""
     last_error: Exception | None = None
-    for attempt in (1, 2):
+    for attempt in range(1, tries + 1):
         try:
             return make()
         except (providers.InvalidOutput, ValidationError) as error:
@@ -683,7 +712,7 @@ def _twice[T](make: Callable[[], T], what: str) -> T:
             reason = str(error) if isinstance(error, providers.InvalidOutput) else type(error).__name__
             log.warning('%s attempt %d unusable (%s)', what, attempt, reason)
             last_error = error
-    raise providers.ProviderError('WardWise could not write a usable study pack this time. Please try again.') from last_error
+    raise providers.ProviderError(f'WardWise could not write {failure} this time. Please try again.') from last_error
 
 
 def _ask[F: BaseModel](instructions: str, material: str, form: type[F], max_tokens: int, label: str, on_step, model=None) -> F:
@@ -706,7 +735,7 @@ def write_pack(request: PackRequest, on_step: Callable[[str], None] = lambda ste
             draft = _ask(pack_instructions(caps), material, PackDraft, OUTPUT_TOKENS, label, on_step)
             return check(draft, material, request, caps)
 
-        pack = _twice(write, 'Study pack')
+        pack = _tries(write, 'Study pack')
     else:
         pack = _write_long(request, material, caps, on_step)
     log.info('Study pack written from about %d tokens of material', estimate_tokens(material))
@@ -714,18 +743,20 @@ def write_pack(request: PackRequest, on_step: Callable[[str], None] = lambda ste
 
 
 def _write_long(request: PackRequest, material: str, caps: Caps, on_step: Callable[[str], None]) -> StudyPack:
-    """Condense each part into notes on the smaller model, then write one pack from all the notes."""
+    """Condense each part into notes on the smaller model, then write one pack from all the notes.
+    The parts stay inside WardWise: the student uploaded one session and sees one session being read."""
     parts = split_parts(request)
     quotas = points_per_part(parts)
     condenser = get_settings().condenser
     points: list[CondensedPoint] = []
     part_of: list[int] = []
     for number, (part, quota) in enumerate(zip(parts, quotas), start=1):
-        label = f'Taking notes on part {number} of {len(parts)}'
+        # About a minute for each part still to read, then two for the pack and the quiz.
+        label = f'Taking notes on your session, about {len(parts) - number + 2} minutes left'
         on_step(label)
         instructions = condense_instructions(number, len(parts), quota, topics_of(points))
         part_material = assemble(part)
-        notes = _twice(
+        notes = _tries(
             lambda: _ask(instructions, part_material, CondensedPart, CONDENSE_OUTPUT_TOKENS, label, on_step, condenser),
             'Notes',
         )
@@ -754,15 +785,49 @@ def _write_long(request: PackRequest, material: str, caps: Caps, on_step: Callab
         return body
 
     on_step('Writing your study pack')
-    body = _twice(write_body, 'Study pack')
+    body = _tries(write_body, 'Study pack')
 
-    # A pack without its quiz is still worth having after minutes of waiting, so a failed quiz is left out.
+    # A pack without its quiz is still worth having after minutes of waiting. The quiz gets a third try, and if
+    # it still fails the pack comes without one: the student can have it written from the pack later.
     on_step('Writing the quiz')
     try:
-        quiz = _twice(lambda: _ask(quiz_instructions(caps, points), notes_text, QuizDraft, OUTPUT_TOKENS, 'Writing the quiz', on_step), 'Quiz')
+        quiz = _tries(
+            lambda: _ask(quiz_instructions(caps, points), notes_text, QuizDraft, OUTPUT_TOKENS, 'Writing the quiz', on_step),
+            'Quiz',
+            tries=QUIZ_TRIES,
+        )
         questions = quiz.questions
     except providers.ProviderError as error:
         log.warning('Quiz left out (%s)', type(error.__cause__ or error).__name__)
         questions = []
 
     return check(from_notes(body, questions, points), material, request, caps)
+
+
+def write_quiz(request: QuizRequest, on_step: Callable[[str], None] = lambda step: None) -> list[CheckedQuestion]:
+    """A quiz for a pack that came without one, written from the pack's own teaching points. Their quotes are
+    checked against the session first, and only points found there are used. If none is found (an imported pack
+    whose material was changed), all are used, and the questions are then marked as not found."""
+    material = assemble(request)
+    points = [
+        CondensedPoint(topic=point.topic.strip() or FALLBACK_TOPIC, text=point.text, quote=point.quote, signals=[])
+        for point in request.points
+        if point.text.strip()
+    ]
+    points = [point for point in points if is_grounded(point.quote, material)] or points
+    if not points:
+        raise providers.ProviderError('This pack has no teaching points to write a quiz from.')
+    if not quiz_fits(points):
+        raise providers.ProviderError("This pack's teaching points are too long to write a quiz from.")
+    caps = caps_for(word_count(request))
+    label = 'Writing the quiz'
+    on_step(label)
+
+    def write() -> list[CheckedQuestion]:
+        quiz = _ask(quiz_instructions(caps, points, _FROM_PACK), notes_material(points), QuizDraft, OUTPUT_TOKENS, label, on_step)
+        questions = check_questions(questions_from_notes(quiz.questions, points), material, caps)
+        if not questions:
+            raise providers.InvalidOutput('The AI wrote no usable questions.')
+        return questions
+
+    return _tries(write, 'Quiz', tries=QUIZ_TRIES, failure='the quiz')

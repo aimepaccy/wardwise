@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { importPacks } from '@/lib/import-packs'
-import { StorageError, deleteAllPacks, deletePack, exportBlob, listPacks, newRecord, savePack, type SavedPack } from '@/lib/storage'
+import { StorageError, addQuiz, deleteAllPacks, deletePack, exportBlob, listPacks, newRecord, savePack, type SavedPack } from '@/lib/storage'
 import type { StudyPack } from '@/types'
 
 const pack: StudyPack = {
@@ -42,6 +42,32 @@ async function exportedFile(records: SavedPack[]) {
 
 beforeEach(async () => {
   await deleteAllPacks()
+})
+
+describe('adding a quiz written later', () => {
+  const quizless = () => recordAt('2026-11-10T09:00:00.000Z')
+  const withoutQuiz = (record: SavedPack): SavedPack => ({ ...record, pack: { ...record.pack, questions: [] } })
+
+  it('saves the quiz into the same pack', async () => {
+    const record = withoutQuiz(quizless())
+    await savePack(record)
+    expect(await addQuiz(record, pack.questions)).toBe(true)
+    const [stored] = await listPacks()
+    expect(stored.pack.questions).toEqual(pack.questions)
+    expect(stored.savedAt).toBe(record.savedAt)
+  })
+
+  it('leaves a pack written again meanwhile alone', async () => {
+    const record = withoutQuiz(quizless())
+    await savePack({ ...record, savedAt: '2026-11-10T10:00:00.000Z' })
+    expect(await addQuiz(record, pack.questions)).toBe(false)
+    expect((await listPacks())[0].pack.questions).toEqual([])
+  })
+
+  it('does not bring back a deleted pack', async () => {
+    expect(await addQuiz(withoutQuiz(quizless()), pack.questions)).toBe(false)
+    expect(await listPacks()).toEqual([])
+  })
 })
 
 describe('saving and listing', () => {

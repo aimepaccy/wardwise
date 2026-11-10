@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app import extract, generate, providers
-from app.schemas import AudioKind, JobState, Materials, PackRequest
+from app.schemas import AudioKind, JobState, Materials, PackRequest, QuizRequest
 
 # A result waits this long for the browser after the job finishes. A job still running is given up only
 # after an hour, far past the longest a 90-minute session takes to write, even with others queued for the allowance.
@@ -167,6 +167,18 @@ def write(job_id: str, request: PackRequest) -> None:
         _update(job_id, status='done', step='Done', pack=pack)
     except Exception as error:
         _fail(job_id, error, 'Something went wrong while writing your study pack.')
+    finally:
+        log.info('Job %s finished in %.1f s', job_id, time.monotonic() - started)
+
+
+def write_quiz(job_id: str, request: QuizRequest) -> None:
+    started = time.monotonic()
+    try:
+        _update(job_id, status='working', step='Writing the quiz')
+        questions = generate.write_quiz(request, on_step=lambda step: _update(job_id, step=step))
+        _update(job_id, status='done', step='Done', questions=questions)
+    except Exception as error:
+        _fail(job_id, error, 'Something went wrong while writing the quiz.')
     finally:
         log.info('Job %s finished in %.1f s', job_id, time.monotonic() - started)
 

@@ -1,3 +1,4 @@
+import type { SavedPack } from '@/lib/storage'
 import type { JobCreated, JobState, Limits, Materials, NotePhoto, Reading, Recording } from '@/types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -5,11 +6,13 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 const UPLOAD_TIMEOUT_MS = 5 * 60_000
 const CHECK_TIMEOUT_MS = 15_000
 const POLL_EVERY_MS = 1500
-// A long session is condensed part by part at the free allowance's pace: about a minute a part, so up to
-// about 10 minutes for 90 minutes of talk, more if another student is writing at the same time.
+// A long session is read at the AI allowance's pace: up to about 10 minutes for 90 minutes of talk, more if
+// another student is writing at the same time.
 const JOB_TIMEOUT_MS = 20 * 60_000
 // The server gives each reading source 12 seconds; a little more covers the trip there and back.
 const READING_TIMEOUT_MS = 20_000
+// The most teaching points the server takes to write a quiz from (a pack has at most 15).
+const MAX_QUIZ_POINTS = 30
 
 export class ApiError extends Error {
   status: number | null
@@ -53,6 +56,15 @@ export function getLimits(): Promise<Limits> {
 export function writePack(materials: Materials): Promise<{ job_id: string }> {
   const body = JSON.stringify({ notes: materials.notes ?? '', transcript: materials.transcript })
   return request('/api/packs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, CHECK_TIMEOUT_MS)
+}
+
+// For a pack that came without a quiz: its teaching points to write from, and the session they came from,
+// which the server only searches for each question's quote. The server kept neither, so they go again.
+export function writeQuiz(record: SavedPack): Promise<{ job_id: string }> {
+  const points = record.pack.summary.slice(0, MAX_QUIZ_POINTS).map(({ topic, text, quote }) => ({ topic: topic ?? '', text, quote }))
+  const { notes, transcript } = record.material
+  const body = JSON.stringify({ notes, transcript, points })
+  return request('/api/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, CHECK_TIMEOUT_MS)
 }
 
 // A GET with the term in the address: the server only looks things up, nothing is stored or changed.

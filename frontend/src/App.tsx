@@ -19,8 +19,8 @@ import { useTheme } from '@/hooks/use-theme'
 import { ApiError, sendSession, waitForJob, writePack } from '@/lib/api'
 import { canWriteStraightAway, hasCorrections, needsCheck } from '@/lib/materials'
 import { stagger } from '@/lib/motion'
-import { StorageError, askToKeepPacks, newRecord, savePack, type SavedPack } from '@/lib/storage'
-import type { Materials, NotePhoto, Recording, SendState, WriteState } from '@/types'
+import { StorageError, addQuiz, askToKeepPacks, newRecord, savePack, type SavedPack } from '@/lib/storage'
+import type { Materials, NotePhoto, Question, Recording, SendState, WriteState } from '@/types'
 
 export default function App() {
   const { theme, chooseTheme } = useTheme()
@@ -136,6 +136,24 @@ export default function App() {
     setShown((current) => (current?.record.id === record.id ? { record, save } : current))
   }
 
+  // A quiz written later for a pack that came without one. Saved first, then shown if the same pack is still open.
+  async function handleQuizWritten(record: SavedPack, questions: Question[]) {
+    const updated: SavedPack = { ...record, pack: { ...record.pack, questions } }
+    let save: SaveStatus | null
+    try {
+      // False if the pack was written again or deleted meanwhile, or was never saved (then it is shown, not saved).
+      save = (await addQuiz(record, questions)) ? { status: 'saved' } : null
+      if (save) setLibraryVersion((version) => version + 1)
+    } catch (error) {
+      save = { status: 'quiz-failed', message: error instanceof StorageError ? error.message : '' }
+    }
+    setShown((current) =>
+      current?.record.id === record.id && current.record.savedAt === record.savedAt
+        ? { record: updated, save: save ?? current.save }
+        : current,
+    )
+  }
+
   function handleDeleted(id: string) {
     setShown((current) => (current?.record.id === id ? null : current))
   }
@@ -200,7 +218,12 @@ export default function App() {
           </div>
 
           {/* A new key starts each pack with fresh cards, quiz and reading, including a pack written again. */}
-          {shown && <PackView key={`${shown.record.id}:${shown.record.savedAt}`} record={shown.record} save={shown.save} />}
+          {shown && <PackView
+              key={`${shown.record.id}:${shown.record.savedAt}`}
+              record={shown.record}
+              save={shown.save}
+              onQuizWritten={handleQuizWritten}
+            />}
 
           {showPanel && sendState.status === 'ready' && draft && (
             <MaterialsPanel

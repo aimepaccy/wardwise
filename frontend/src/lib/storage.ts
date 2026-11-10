@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { StudyPack } from '@/types'
+import type { Question, StudyPack } from '@/types'
 
 // Study packs live in this browser's IndexedDB, never on WardWise's server. Export is the student's backup copy.
 
@@ -72,6 +72,19 @@ export function newRecord(pack: StudyPack, material: PackMaterial): SavedPack {
 export function savePack(record: SavedPack) {
   return withDatabase(async (db) => {
     await db.put('packs', record)
+  })
+}
+
+// Adds a quiz written later to the saved pack, in one transaction. Only to the same writing of the pack: if it
+// was written again or deleted meanwhile, nothing changes and the answer is false.
+export function addQuiz(record: SavedPack, questions: Question[]) {
+  return withDatabase(async (db) => {
+    const tx = db.transaction('packs', 'readwrite')
+    const stored = await tx.store.get(record.id)
+    const same = stored !== undefined && stored.savedAt === record.savedAt
+    if (same) await tx.store.put({ ...stored, pack: { ...stored.pack, questions } })
+    await tx.done
+    return same
   })
 }
 

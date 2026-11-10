@@ -136,15 +136,36 @@ def test_a_session_with_no_teaching_is_explained(fake_writer):
     assert 'no clinical teaching' in state['error']
 
 
-def test_progress_names_each_step(fake_writer):
+def test_progress_names_each_step_but_never_the_parts(fake_writer):
     steps = []
     generate.write_pack(PackRequest(transcript=LONG), on_step=steps.append)
     assert steps == [
         'Writing your study pack',
-        *(f'Taking notes on part {n} of {PARTS}' for n in range(1, PARTS + 1)),
+        *(f'Taking notes on your session, about {PARTS - n + 2} minutes left' for n in range(1, PARTS + 1)),
         'Writing your study pack',
         'Writing the quiz',
     ]
+    # The student uploaded one session: how WardWise splits it stays inside WardWise.
+    assert not any('part' in step.lower() for step in steps)
+
+
+def test_waiting_for_the_allowance_is_shown_plainly():
+    steps = []
+    on_wait = generate._waiting('Writing the quiz', steps.append)
+    on_wait(40)
+    on_wait(0)
+    assert steps == ['Writing the quiz (next turn in about 40 s)', 'Writing the quiz']
+
+
+def test_the_quiz_gets_a_third_try(fake_writer):
+    broken = providers.InvalidOutput('The AI ran out of room before finishing.')
+    fake_writer['answers'].extend(
+        notes_for_every_part('number 1 is about safe asthma care')
+        + [json.dumps(noted(fake_pack(), 'summary', 'flashcards')), broken, broken]
+    )
+    state = write_long(transcript=LONG)
+    assert [call['form'] for call in fake_writer['calls']][-3:] == ['QuizDraft'] * 3
+    assert len(state['pack']['questions']) == 1
 
 
 def point(quote: str, *signals: str, text: str = 'A point.', topic: str = 'Asthma') -> CondensedPoint:
@@ -246,4 +267,5 @@ def test_a_call_bigger_than_the_allowance_goes_alone():
 def test_the_daily_limit_has_its_own_message():
     response = httpx2.Response(429, request=httpx2.Request('POST', 'https://ai.example/v1'))
     error = openai.RateLimitError('Rate limit reached on tokens per day (TPD): Limit 200000', response=response, body=None)
-    assert "today's free allowance" in str(providers._translate(error, 'writing'))
+    message = str(providers._translate(error, 'writing'))
+    assert "today's AI allowance" in message and 'free' not in message

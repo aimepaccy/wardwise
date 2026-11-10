@@ -52,6 +52,19 @@ class PackRequest(BaseModel):
     transcript: str | None = Field(None, max_length=MAX_TEXT_CHARS)
 
 
+# A pack's teaching point, sent back to have a quiz written for a pack that came without one.
+class QuizPoint(BaseModel):
+    # Packs written before topics existed have none.
+    topic: str = Field('', max_length=200)
+    text: str = Field(max_length=2000)
+    quote: str = Field(max_length=2000)
+
+
+# The pack's points to write from, and the session they came from, to check each question's quote against.
+class QuizRequest(PackRequest):
+    points: list[QuizPoint] = Field(min_length=1, max_length=30)
+
+
 # The form the AI fills in. `extra='forbid'` makes the JSON schema say "no other fields", which strict
 # structured output requires. Counts are maximums only: thin material should give fewer items, not invented ones.
 class Strict(BaseModel):
@@ -184,6 +197,8 @@ class JobState(BaseModel):
     step: str
     materials: Materials | None = None
     pack: StudyPack | None = None
+    # A quiz written on its own, for a pack that came without one.
+    questions: list[CheckedQuestion] | None = None
     error: str | None = None
 
 
