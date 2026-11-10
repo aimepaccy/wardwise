@@ -336,3 +336,15 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **Authentication vs authorisation** (fundamental): who you are (sign-in) vs what you may see (only your own packs). Needed if WardWise ever has accounts.
 - **Supply chain for AI skills**: a skill's instructions steer the AI like code steers a program; read them, pin a reviewed copy, never auto-update by link.
 - **Browser extensions**: run inside every page and can send requests of their own (a Google Fonts request appeared in WardWise's Network tab that WardWise's code never makes). We control WardWise's code, not the visitor's browser.
+
+## 8. Building WardWise (from 2026-11-10)
+- **Attack surface** (fundamental): every place a stranger can send something into your system. Deleting the slide readers removed the riskiest part of WardWise's (files are the hardest input to make safe).
+- **Breaking change**: a change to an API contract that old callers cannot survive. Ship both sides together, and decide on purpose whether to keep reading old data (backward compatibility, a tolerant reader) or leave it behind, as WardWise did with slides.
+- **Human in the loop, before or after** (fundamental): where the human check sits. WardWise moved it from before the pack (check, then write) to after (write, then check), like a lab that releases results at once and flags critical values.
+- **Automation bias** (fundamental): people trust what a machine hands them and stop checking. The counter-measures are making the check easy and pointing it at what matters (highlights and a count).
+- **Screening-test thinking for alerts**: a highlighter is a screening test. Tune it for sensitivity when a miss is costly (a wrong dose) and a false alarm is cheap (a glance). Too many false alarms, though, and people stop looking (alert fatigue).
+- **Edit distance (Levenshtein distance)**: the fewest single-letter changes that turn one word into another ("ipertropium" to "ipratropium" is 2). The engine behind fuzzy matching and spell-checkers. `editDistance` in `lib/highlight.ts`.
+- **Pure function** (fundamental): output depends only on input, with no side effects, so it is easy to test and reuse. `findMarks(text)` gives marks for any text, the original or the student's correction.
+- **Word error rate (WER)**: the share of words a transcript got wrong (substituted, missing or added), the standard score for speech-to-text. A general WER hides what matters here; a critical-term error rate (doses, drugs) measures the costly errors.
+- **Speech-to-text hallucination**: words that were never said, often added in silence ("Thank you." at the end of a silent stretch). Worse than a misspelling, because nothing flags it.
+- **Leaderboard vs your own data**: benchmarks use other speakers and other words; a model that wins on American English may not win on Rwandan-accented ward talk. Decide with a small test set of your own (an eval set).

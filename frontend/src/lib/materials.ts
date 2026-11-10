@@ -1,4 +1,4 @@
-import type { Materials } from '@/types'
+import type { Limits, Materials } from '@/types'
 
 // Derived from the two versions, never stored.
 export function hasCorrections(heard: Materials, draft: Materials) {
@@ -15,3 +15,11 @@ export function hasReviewable(materials: Materials) {
 export function needsCheck(materials: Materials) {
   return hasReviewable(materials) || materials.warnings.length > 0
 }
+
+// Whether the pack can be written as soon as WardWise has read the material: there is text, and it fits.
+// Otherwise the student sees why first. Without the limits (the check failed), the server decides.
+export function canWriteStraightAway(materials: Materials, limits: Limits | null) {
+  const text = [materials.notes ?? '', materials.transcript ?? ''].join('\n')
+  return hasReviewable(materials) && text.trim() !== '' && (limits === null || text.length <= limits.max_pack_chars)
+}
+

@@ -4,13 +4,13 @@ import { Check } from 'lucide-react'
 import { spring } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
-export type StepKey = 'upload' | 'read' | 'check' | 'write'
+export type StepKey = 'upload' | 'read' | 'write' | 'check'
 
 const LABELS: Record<StepKey, string> = { upload: 'Upload', read: 'Read', check: 'Check', write: 'Write' }
 
 type StepsProps = {
   steps: StepKey[]
-  // The step in progress, or 'done' once the study pack is ready.
+  // The step in progress, or 'done' when every step is finished.
   current: StepKey | 'done'
   // True while WardWise is working on the current step (not waiting for the student).
   busy: boolean

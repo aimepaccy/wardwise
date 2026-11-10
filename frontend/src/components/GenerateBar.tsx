@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { AlertCircle, AlertTriangle, CheckCircle2, Loader2, Mic, NotebookPen, RefreshCw, Sparkles } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { formatDuration, formatFileSize, plural } from '@/lib/format'
-import { hasReviewable, needsCheck } from '@/lib/materials'
+import { hasReviewable } from '@/lib/materials'
 import { rise, spring } from '@/lib/motion'
 import { Steps, type StepKey } from '@/components/Steps'
 import { cn } from '@/lib/utils'
@@ -79,18 +79,14 @@ export function GenerateBar({
   const noText = reviewing && !inputsChanged && packSize?.empty === true
   const enabled = chips.length > 0 && !busy && !recordingLive && !tooLong && !nothingRead && !noText
 
-  // Check is skipped when there is nothing to check. Every reading now gives text or a warning, so this
-  // path is unused until packs are written straight from a recording (the next build).
-  const willCheck = reviewing ? needsCheck(sendState.materials) : recording !== null || photoCount > 0
-  const steps: StepKey[] = willCheck ? ['upload', 'read', 'check', 'write'] : ['upload', 'read', 'write']
+  // The pack is written first and checked after: the student's check comes last, once there is a pack.
+  const steps: StepKey[] = ['upload', 'read', 'write', 'check']
 
-  function stepNow(): StepKey | 'done' | null {
+  function stepNow(): StepKey | null {
     if (sendState.status === 'sending') return 'upload'
     if (sendState.status === 'working') return 'read'
     if (!reviewing) return null
-    if (writeState.status === 'writing') return 'write'
-    if (writeState.status === 'done') return 'done'
-    return willCheck ? 'check' : 'write'
+    return writeState.status === 'done' ? 'check' : 'write'
   }
 
   const currentStep = stepNow()
@@ -135,9 +131,13 @@ export function GenerateBar({
       const loss = corrected ? '; this replaces your corrections' : ''
       return `Your recording or photos changed after WardWise read them. Read again to include the changes${loss}.`
     }
-    if (writeState.status === 'done') return 'Your study pack is ready below. Correct the text above and write again if you need to.'
-    if (nothingRead) return 'WardWise could not read anything from this material. See the notes above, then try clearer photos or another recording.'
-    if (noText) return 'There is no text to write from. See the notes above, then undo your changes or read again.'
+    if (writeState.status === 'done') {
+      return sendState.materials.warnings.length > 0
+        ? 'Your study pack is ready, but WardWise could not read everything: see the warnings below it.'
+        : 'Your study pack is ready. Check the highlighted doses and drug names below it, and write again after any correction.'
+    }
+    if (nothingRead) return 'WardWise could not read anything from this material. See the warnings above, then try clearer photos or another recording.'
+    if (noText) return corrected ? 'There is no text to write from. Undo your changes above, or read again.' : 'There is no text to write from. See the warnings above, then read again.'
     return 'WardWise has read your material. Correct anything it got wrong above, then write your study pack.'
   }
 

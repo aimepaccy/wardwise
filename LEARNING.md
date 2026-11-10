@@ -385,3 +385,11 @@ Walkthrough format (preview, build, walkthrough, engineer version), with no expl
 - **Layout:** CSS grid with equal-height rows (`items-stretch`, the default), flex-grow (`flex-1`) to let the drop zone fill its card, breakpoints (`md`, `lg`), and capping a drawing with `max-h` instead of letting it grow with its column.
 - **Tools:** Playwright driving the installed Edge (no browser download) for screenshots at three widths and a sideways-scroll check; the project's PostToolUse hook running the back-end tests after each edit; dev servers on Windows missing file changes (uvicorn `--reload`, and a Vite process left behind on port 5173), fixed by a clean restart.
 
+## 2026-11-10: Build item 2, automatic packs with risky-word highlighting
+Walkthrough format, no explain-back question.
+- **Human in the loop, moved:** check after writing instead of before, like a lab that releases results and flags critical values. The named risk is automation bias; the counter-measures are highlights pointed at costly errors and a count that nudges.
+- **The highlighter as a screening test:** tuned for sensitivity (a false alarm costs a glance, a missed dose costs a wrong card), but with a never-flag list, because too many false alarms bring alert fatigue.
+- **Regular expressions and edit distance:** a pattern finds numbers with units and ranges; Levenshtein distance finds near-miss drug names, with rules (6+ letters, same first letter, 1 or 2 edits) to keep ordinary words out. A pure function, unit-tested, 43 ms on 10,000 words.
+- **Evidence from live runs:** Groq's Whisper confidence comes per 30 seconds, too coarse to use; turbo misheard "ipratropium", full large-v3 heard it but invented "Thank you." in silence (speech-to-text hallucination); the writer silently repaired mishearings in the pack. A stress test (one passage 140 times) exposed a list that repeated the same warning, fixed by grouping.
+- **Tools:** a subagent as an independent "clinical pharmacist" reviewer (verdict: worth it for domain checks, since it tested real word pairs and found an apostrophe bug and false alarms such as protocol to propofol); a research subagent for provider facts; Playwright with a network stand-in to test a path that needs a long recording.
+

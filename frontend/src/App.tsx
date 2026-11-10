@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { MotionConfig, motion } from 'motion/react'
 import { Background } from '@/components/Background'
@@ -17,7 +17,7 @@ import { useLeaveWarning } from '@/hooks/use-leave-warning'
 import { useLimits } from '@/hooks/use-limits'
 import { useTheme } from '@/hooks/use-theme'
 import { ApiError, sendSession, waitForJob, writePack } from '@/lib/api'
-import { hasCorrections, needsCheck } from '@/lib/materials'
+import { canWriteStraightAway, hasCorrections, needsCheck } from '@/lib/materials'
 import { stagger } from '@/lib/motion'
 import { StorageError, askToKeepPacks, newRecord, savePack, type SavedPack } from '@/lib/storage'
 import type { Materials, NotePhoto, Recording, SendState, WriteState } from '@/types'
@@ -41,6 +41,14 @@ export default function App() {
   // Each write gets a number. A write that finishes after the student moved on (closed the panel or
   // read again) is no longer the latest, and its result is ignored.
   const latestWrite = useRef(0)
+  // The pack written from the current reading. Writing again after a correction replaces it, so My packs
+  // does not keep the uncorrected version beside the corrected one.
+  const packFromReading = useRef<string | null>(null)
+  // The inputs as they are now, for code that resumes after a wait.
+  const inputsNow = useRef({ recording, photos })
+  useEffect(() => {
+    inputsNow.current = { recording, photos }
+  }, [recording, photos])
 
   function forgetWrite() {
     latestWrite.current += 1
@@ -68,6 +76,7 @@ export default function App() {
     setSendState({ status: 'sending' })
     setDraft(null)
     forgetWrite()
+    packFromReading.current = null
     let materials: Materials
     try {
       const { job_id, receipt } = await sendSession(recording, photos)
@@ -81,7 +90,10 @@ export default function App() {
       setSendState({ status: 'error', message: messageOf(error) })
       return
     }
-    if (!needsCheck(materials)) await handleWrite(materials)
+    // The pack is written straight away; the student checks what WardWise heard afterwards, below the pack.
+    // Not if the student changed the recording or photos while WardWise was reading: they need reading again.
+    const unchanged = inputsNow.current.recording === recording && inputsNow.current.photos === photos
+    if (unchanged && canWriteStraightAway(materials, limits)) await handleWrite(materials)
   }
 
   // Writes from the corrected copy. The review state stays as it is, so a failure loses no corrections.
@@ -104,6 +116,8 @@ export default function App() {
       return
     }
     if (!isLatest()) return
+    record = { ...record, id: packFromReading.current ?? record.id }
+    packFromReading.current = record.id
     setWriteState({ status: 'done' })
     setShown({ record, save: { status: 'saving' } })
 
@@ -185,11 +199,15 @@ export default function App() {
             />
           </div>
 
+          {/* A new key starts each pack with fresh cards, quiz and reading, including a pack written again. */}
+          {shown && <PackView key={`${shown.record.id}:${shown.record.savedAt}`} record={shown.record} save={shown.save} />}
+
           {showPanel && sendState.status === 'ready' && draft && (
             <MaterialsPanel
               heard={sendState.materials}
               draft={draft}
               locked={writeState.status === 'writing'}
+              attention={writeState.status !== 'writing' && writeState.status !== 'done'}
               onChange={(next) => {
                 setDraft(next)
                 clearWriteError()
@@ -197,9 +215,6 @@ export default function App() {
               onClose={closeMaterials}
             />
           )}
-
-          {/* A new key starts each pack with fresh cards, quiz and reading. */}
-          {shown && <PackView key={shown.record.id} record={shown.record} save={shown.save} />}
 
           <GenerateBar
             generateRef={generateRef}
