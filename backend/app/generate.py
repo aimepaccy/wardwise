@@ -282,7 +282,7 @@ Rules:
 
 
 # Our own tag names inside the material could close a section early and pass text off as instructions.
-_TAG = re.compile(r'</?\s*(material|notes|transcript|points)\b[^>]*>', re.IGNORECASE)
+_TAG = re.compile(r'<\s*/?\s*(material|notes|transcript|points|passage|question|history|group|topic)\b[^>]*>', re.IGNORECASE)
 _LINK = re.compile(r'https?://\S+|www\.\S+|\bdoi\s*:?\s*10\.\S+|\b10\.\d{4,}/\S+', re.IGNORECASE)
 # Symbols that change clinical meaning (< 92% is not > 92%) are kept as words of their own.
 _SYMBOLS = '<>≤≥%±+'
@@ -433,36 +433,38 @@ def passages(request: PackRequest) -> list[str]:
     long for one passage (fast speech with little punctuation) is cut into pieces, so one quote can
     never mark a whole session as covered. A short tail joins the passage before it.
     """
-    result = []
-    for text in (request.notes, request.transcript or ''):
-        units: list[tuple[str, bool]] = []
-        for line in _untag(text).splitlines():
-            first = True
-            for sentence in _SENTENCE_END.split(line.strip()):
-                words = sentence.split()
-                while words:
-                    size = PASSAGE_WORDS if len(words) > MAX_PASSAGE_WORDS else len(words)
-                    units.append((' '.join(words[:size]), first))
-                    words = words[size:]
-                    first = False
+    return [passage for text in (request.notes, request.transcript or '') for passage in cut(text)]
 
-        part: list[list[tuple[str, bool]]] = []
-        current: list[tuple[str, bool]] = []
-        for unit in units:
-            if current and _count(current) + len(unit[0].split()) > MAX_PASSAGE_WORDS:
-                part.append(current)
-                current = []
-            current.append(unit)
-            if _count(current) >= PASSAGE_WORDS:
-                part.append(current)
-                current = []
-        if current:
-            if part and _count(current) < MIN_TAIL_WORDS:
-                part[-1] = part[-1] + current
-            else:
-                part.append(current)
-        result.extend(_join(units) for units in part)
-    return result
+
+def cut(text: str) -> list[str]:
+    """One text cut into passages, as `passages` describes."""
+    units: list[tuple[str, bool]] = []
+    for line in _untag(text).splitlines():
+        first = True
+        for sentence in _SENTENCE_END.split(line.strip()):
+            words = sentence.split()
+            while words:
+                size = PASSAGE_WORDS if len(words) > MAX_PASSAGE_WORDS else len(words)
+                units.append((' '.join(words[:size]), first))
+                words = words[size:]
+                first = False
+
+    part: list[list[tuple[str, bool]]] = []
+    current: list[tuple[str, bool]] = []
+    for unit in units:
+        if current and _count(current) + len(unit[0].split()) > MAX_PASSAGE_WORDS:
+            part.append(current)
+            current = []
+        current.append(unit)
+        if _count(current) >= PASSAGE_WORDS:
+            part.append(current)
+            current = []
+    if current:
+        if part and _count(current) < MIN_TAIL_WORDS:
+            part[-1] = part[-1] + current
+        else:
+            part.append(current)
+    return [_join(units) for units in part]
 
 
 def uncovered(request: PackRequest, quotes: list[str]) -> tuple[list[str], int]:

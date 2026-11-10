@@ -106,6 +106,18 @@ DEFAULT_ANSWERS = {
     'PackBodyDraft': lambda: noted(fake_pack(), 'summary', 'flashcards'),
     'QuizDraft': lambda: {'questions': noted(fake_pack(), 'questions')['questions']},
     'CondensedPart': lambda: fake_points('for five days in acute asthma'),
+    'QuestionDraft': lambda: {
+        'question': 'How long is prednisolone given in acute asthma?',
+        'keywords': ['prednisolone', 'steroid'],
+        'search_terms': ['prednisolone asthma'],
+        'group': '',
+        'real_patient': False,
+    },
+    'AnswerDraft': lambda: {
+        'parts': [{'text': 'In your session, prednisolone is given for five days.', 'sources': [1],
+                   'quote': 'once daily for five days', 'applies': 'yes'}],
+        'disagree': False,
+    },
 }
 
 

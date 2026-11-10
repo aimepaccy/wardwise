@@ -86,6 +86,7 @@ def test_provider_failure_is_explained(fake_writer):
         'materials': None,
         'pack': None,
         'questions': None,
+        'answer': None,
         'error': 'The writing service is busy. Please try again in a minute.',
     }
     assert len(fake_writer['calls']) == 1  # a busy service is not retried at once

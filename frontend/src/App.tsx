@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { MotionConfig, motion } from 'motion/react'
 import { Background } from '@/components/Background'
@@ -13,6 +13,7 @@ import { PackView, type SaveStatus } from '@/components/PackView'
 import { PrivacyNotice } from '@/components/PrivacyNotice'
 import { Recorder } from '@/components/Recorder'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { UploadsBar } from '@/components/UploadsBar'
 import { useLeaveWarning } from '@/hooks/use-leave-warning'
 import { useLimits } from '@/hooks/use-limits'
 import { useTheme } from '@/hooks/use-theme'
@@ -37,6 +38,9 @@ export default function App() {
   // What the last saved pack was written from, to tell whether a recording or corrections are only in memory.
   const [savedFrom, setSavedFrom] = useState<{ draft: Materials; recording: Recording | null; photos: NotePhoto[] } | null>(null)
   const [libraryVersion, setLibraryVersion] = useState(0)
+  // With a pack on screen, the recorder and photos fold away until the student asks for them.
+  const [uploadsOpen, setUploadsOpen] = useState(true)
+  const uploadsId = useId()
   const generateRef = useRef<HTMLButtonElement>(null)
   // Each write gets a number. A write that finishes after the student moved on (closed the panel or
   // read again) is no longer the latest, and its result is ignored.
@@ -154,6 +158,17 @@ export default function App() {
     )
   }
 
+  // Clears the inputs for the next round. The pack on screen stays until a new one replaces it.
+  function startNewSession() {
+    setRecording(null)
+    setPhotos([])
+    setSendState({ status: 'idle' })
+    setDraft(null)
+    forgetWrite()
+    packFromReading.current = null
+    setUploadsOpen(true)
+  }
+
   function handleDeleted(id: string) {
     setShown((current) => (current?.record.id === id ? null : current))
   }
@@ -183,6 +198,16 @@ export default function App() {
   const correctionsAtRisk = corrected && draft !== savedFrom?.draft
   useLeaveWarning(busy || recordingAtRisk || photosAtRisk || correctionsAtRisk)
 
+  // Each new pack on screen folds the uploads once (not while recording, so the recorder stays in view).
+  // Set during render rather than in an effect, so the page never draws the unfolded state first.
+  const shownKey = shown ? `${shown.record.id}:${shown.record.savedAt}` : null
+  const [foldedFor, setFoldedFor] = useState<string | null>(null)
+  if (shownKey !== null && shownKey !== foldedFor) {
+    setFoldedFor(shownKey)
+    if (!recordingLive) setUploadsOpen(false)
+  }
+  const folded = shown !== null && !uploadsOpen
+
   return (
     <MotionConfig reducedMotion="user">
       <TooltipProvider delayDuration={300}>
@@ -205,10 +230,25 @@ export default function App() {
               />
             }
           />
-          <Hero />
+          {!shown && <Hero />}
 
-          {/* The two ways in, side by side on wide screens and the same height, so neither leaves a gap. */}
-          <div className="grid gap-6 md:grid-cols-2">
+          {shown && (
+            <UploadsBar
+              recording={recording}
+              photos={photos}
+              open={uploadsOpen}
+              live={recordingLive}
+              atRisk={recordingAtRisk || photosAtRisk || correctionsAtRisk}
+              locked={busy || recordingLive}
+              controls={uploadsId}
+              onToggle={() => setUploadsOpen((open) => !open)}
+              onNewSession={startNewSession}
+            />
+          )}
+
+          {/* The two ways in, side by side on wide screens and the same height, so neither leaves a gap.
+              Folded with `hidden` rather than removed, so a recording in progress keeps its microphone. */}
+          <div id={uploadsId} hidden={folded} className="grid gap-6 md:grid-cols-2">
             <Recorder recording={recording} onChange={setRecording} onLiveChange={setRecordingLive} />
             <NotesPhotos
               photos={photos}

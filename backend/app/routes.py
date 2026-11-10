@@ -17,6 +17,7 @@ from app.files import (
     display_name,
 )
 from app.schemas import (
+    AskRequest,
     AudioReceipt,
     Health,
     JobCreated,
@@ -140,6 +141,15 @@ def write_pack(request: PackRequest, background: BackgroundTasks) -> PackJobCrea
 def write_quiz(request: QuizRequest, background: BackgroundTasks) -> PackJobCreated:
     job_id = jobs.create()
     background.add_task(jobs.write_quiz, job_id, request)
+    return PackJobCreated(job_id=job_id)
+
+
+# Ask about my session. Like a pack, the session comes with the question and is not kept; only search terms
+# (never the session) go to the literature sources.
+@router.post('/ask', status_code=202)
+def ask_question(request: AskRequest, background: BackgroundTasks) -> PackJobCreated:
+    job_id = jobs.create()
+    background.add_task(jobs.ask_question, job_id, request)
     return PackJobCreated(job_id=job_id)
 
 

@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # Far above what fits in one study pack; the token budget is the real limit. This only stops absurd requests.
 MAX_TEXT_CHARS = 200_000
+MAX_QUESTION_CHARS = 500
 AudioKind = Literal['webm', 'ogg', 'mp4', 'wav', 'mp3', 'flac']
 PhotoKind = Literal['jpeg', 'png', 'webp']
 
@@ -192,6 +193,84 @@ class PackJobCreated(BaseModel):
     job_id: str
 
 
+# "Ask about my session". The browser sends the session with each question, since the server keeps no copy,
+# and the last few turns of the chat, so a follow-up ("and the dose?") can be understood.
+class ChatTurn(BaseModel):
+    question: str = Field(max_length=MAX_QUESTION_CHARS)
+    answer: str = Field(max_length=4000)
+
+
+class AskRequest(PackRequest):
+    question: str = Field(min_length=2, max_length=MAX_QUESTION_CHARS)
+    history: list[ChatTurn] = Field(default_factory=list, max_length=10)
+    # The pack's title, so a short question ("how long for prednisolone?") is searched in the session's context.
+    topic: str = Field('', max_length=200)
+
+
+class QuestionDraft(Strict):
+    question: str = Field(description='The latest question, rewritten to stand on its own.')
+    keywords: list[str] = Field(description='Words and synonyms to find the answer in the session.')
+    search_terms: list[str] = Field(description='1 to 3 short search terms for medical literature, most specific first.')
+    group: str = Field(description='The patient group the question asks about, such as "children"; empty if none.')
+    real_patient: bool = Field(description="True if the question is about a real person's care rather than the teaching.")
+
+
+class AnswerPartDraft(Strict):
+    text: str = Field(description='One or two sentences of the answer.')
+    sources: list[int] = Field(description='The numbers of the passages this part rests on.')
+    quote: str = Field(description='Words copied exactly from the first passage in sources.')
+    applies: Literal['yes', 'not stated', 'no'] = Field(
+        description='Do the cited passages say they are about the group the question asks about? "yes" if the question names no group.'
+    )
+
+
+class AnswerDraft(Strict):
+    parts: list[AnswerPartDraft] = Field(description='The answer in short parts; none if the passages do not answer it.')
+    disagree: bool = Field(description='True if the session and the literature say different things.')
+
+
+SourceKind = Literal['session', 'pubmed', 'statpearls']
+
+
+class AnswerSource(BaseModel):
+    number: int
+    kind: SourceKind
+    title: str
+    # Built by WardWise from a checked id; never written by the AI. None for the session.
+    url: str | None
+    detail: str
+    # The cited passages themselves, in the order cited, so the student can see what the answer rests on.
+    passages: list[str]
+
+
+class AnswerPart(BaseModel):
+    text: str
+    sources: list[int]
+    quote: str
+    # The quote was found in the passages this part cites.
+    grounded: bool
+    # The question asks about a group (such as children) and the cited passages do not say they are about it.
+    group_unclear: bool = False
+
+
+class Answer(BaseModel):
+    # The question as WardWise understood it, after rewriting a follow-up to stand on its own.
+    question: str
+    parts: list[AnswerPart]
+    # Only the sources the answer cites, numbered in the order they are first cited.
+    sources: list[AnswerSource]
+    disagree: bool
+    # The patient group the question asks about, such as "children"; empty if none.
+    group: str = ''
+    # The question was about a real patient's care, so WardWise did not search or answer.
+    declined: bool = False
+    # The literature search terms used, so the student can see what was looked up.
+    searched: list[str]
+    # Sources that could not be searched this time, in plain words.
+    notes: list[str]
+    model: str
+
+
 class JobState(BaseModel):
     status: JobStatus
     step: str
@@ -199,6 +278,7 @@ class JobState(BaseModel):
     pack: StudyPack | None = None
     # A quiz written on its own, for a pack that came without one.
     questions: list[CheckedQuestion] | None = None
+    answer: Answer | None = None
     error: str | None = None
 
 

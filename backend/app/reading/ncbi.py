@@ -1,10 +1,14 @@
 """PubMed articles and StatPearls chapters, both from NCBI's E-utilities.
 
 Each lookup is two calls: esearch finds the ids, esummary gives titles and details for those ids.
+For "Ask about my session", efetch gives the abstracts themselves. Every StatPearls chapter is also in
+PubMed, with a short clinical summary of the chapter as its abstract, so one call serves both sources.
 """
 
 import html
 import re
+from dataclasses import dataclass
+from datetime import date
 
 from app.config import get_settings
 from app.reading import web
@@ -13,6 +17,8 @@ from app.schemas import ReadingLink
 EUTILS = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
 MAX_ARTICLES = 3
 MAX_CHAPTERS = 3
+RETRY_STATUSES = {429, 500, 502, 503, 504}
+RECENT_YEARS = 15
 
 _PMID = re.compile(r'^\d{1,9}$')
 _NBK = re.compile(r'^NBK\d{1,9}$')
@@ -33,15 +39,23 @@ def _queue() -> web.Spacing:
     return _spacing
 
 
-async def _get(tool: str, params: dict) -> dict:
-    params = params | {'retmode': 'json', 'tool': 'wardwise'}
+async def _call(tool: str, params: dict, retmode: str):
+    params = params | {'retmode': retmode, 'tool': 'wardwise'}
     key = get_settings().ncbi_api_key.get_secret_value()
     if key:
         params['api_key'] = key
-    await _queue().wait()
-    response = await web.client().get(f'{EUTILS}/{tool}', params=params)
+    # NCBI now and then turns a call away (429) or fails (5xx) under load; one more try, in the queue again, usually works.
+    for attempt in range(2):
+        await _queue().wait()
+        response = await web.client().get(f'{EUTILS}/{tool}', params=params)
+        if response.status_code not in RETRY_STATUSES or attempt:
+            break
     response.raise_for_status()
-    return response.json()
+    return response
+
+
+async def _get(tool: str, params: dict) -> dict:
+    return (await _call(tool, params, 'json')).json()
 
 
 async def _search(database: str, query: str, count: int) -> list[str]:
@@ -122,3 +136,89 @@ async def statpearls(term: str) -> list[ReadingLink]:
         if len(links) == MAX_CHAPTERS:
             break
     return links
+
+
+# Abstracts for "Ask about my session". efetch answers only in XML; as with chapter titles, a few known tags
+# are read with patterns rather than a general XML parser.
+_RECORD = re.compile(r'<(PubmedArticle|PubmedBookArticle)>(.*?)</\1>', re.DOTALL)
+_RECORD_PMID = re.compile(r'<PMID[^>]*>(\d{1,9})</PMID>')
+_ARTICLE_TITLE = re.compile(r'<ArticleTitle[^>]*>(.*?)</ArticleTitle>', re.DOTALL)
+# Only the main abstract: an <OtherAbstract> holds translations and plain-language versions.
+_ABSTRACT = re.compile(r'<Abstract>(.*?)</Abstract>', re.DOTALL)
+_ABSTRACT_TEXT = re.compile(r'<AbstractText([^>]*)>(.*?)</AbstractText>', re.DOTALL)
+# A superscript kept as "^", so 10<sup>9</sup>/L does not become 109/L.
+_SUPERSCRIPT = re.compile(r'<sup>(.*?)</sup>', re.DOTALL)
+_LABEL = re.compile(r'Label="([^"]*)"')
+_BOOK_ID = re.compile(r'<ArticleId IdType="bookaccession">(NBK\d{1,9})</ArticleId>')
+_JOURNAL = re.compile(r'<Journal>.*?<Title>(.*?)</Title>', re.DOTALL)
+# Only inside PubDate: some give a MedlineDate there instead, and a later Year belongs to another date.
+_YEAR = re.compile(r'<PubDate>(?:(?!</PubDate>).)*?<Year>(\d{4})</Year>', re.DOTALL)
+MAX_ABSTRACT_CHARS = 6000
+
+
+@dataclass
+class Abstract:
+    pmid: str
+    title: str
+    text: str
+    url: str
+    detail: str
+
+
+async def find_for_answer(terms: list[str], count: int, *, statpearls: bool) -> list[str]:
+    """PubMed ids for a question's search terms, most specific term first: each later term only fills the
+    places left. (Joined with OR, a broad term crowded out the specific one.) Every word of a term must be in
+    the title or abstract. StatPearls chapters are kept apart, so the two sources never repeat each other.
+    For PubMed, recent reviews and guidelines come first."""
+    ids: list[str] = []
+    for index, term in enumerate(terms):
+        words = _tagged(term, 'tiab')
+        if not words or len(ids) >= count:
+            continue
+        if statpearls:
+            found = await _search('pubmed', f'{words} AND statpearls[book]', count)
+        else:
+            # Doses and advice change, so recent reviews come first, then any recent article, then any at all.
+            # Only the most specific term gets every step, so one question makes at most five searches here:
+            # the NCBI queue (3 a second) is shared by every student and by Further reading.
+            query = f'{words} AND english[lang] NOT statpearls[book]'
+            recent = f'{query} AND ("{date.today().year - RECENT_YEARS}"[dp] : "3000"[dp])'
+            steps = (f'{recent} AND (review[pt] OR guideline[pt])', recent, query) if index == 0 else (recent,)
+            for attempt in steps:
+                found = await _search('pubmed', attempt, count)
+                if found:
+                    break
+        ids += [pmid for pmid in found if pmid not in ids][: count - len(ids)]
+    return ids
+
+
+async def abstracts(ids: list[str]) -> list[Abstract]:
+    ids = [pmid for pmid in ids if _PMID.match(pmid)]
+    if not ids:
+        return []
+    found = (await _call('efetch.fcgi', {'db': 'pubmed', 'id': ','.join(ids)}, 'xml')).text
+    return [abstract for abstract in (_abstract(match.group(2)) for match in _RECORD.finditer(found)) if abstract]
+
+
+def _abstract(record: str) -> Abstract | None:
+    # A chapter lists its references, with their own ids, after its abstract; only the part before them is read.
+    record = record.split('<ReferenceList', 1)[0]
+    pmid = _RECORD_PMID.search(record)
+    title = _ARTICLE_TITLE.search(record)
+    abstract = _ABSTRACT.search(record)
+    parts = []
+    for attributes, text in _ABSTRACT_TEXT.findall(abstract.group(1) if abstract else ''):
+        label = _LABEL.search(attributes)
+        text = _plain(_SUPERSCRIPT.sub(r'^\1', text))
+        parts.append(f'{label.group(1).title()}: {text}' if label and text else text)
+    text = ' '.join(part for part in parts if part)[:MAX_ABSTRACT_CHARS]
+    if not pmid or not title or not text:
+        return None
+    pmid = pmid.group(1)
+    book = _BOOK_ID.search(record)
+    if book:
+        return Abstract(pmid, _plain(title.group(1)), text, f'https://www.ncbi.nlm.nih.gov/books/{book.group(1)}/', 'StatPearls')
+    journal = _JOURNAL.search(record)
+    year = _YEAR.search(record)
+    detail = ', '.join(_plain(found.group(1)) for found in (journal, year) if found)
+    return Abstract(pmid, _plain(title.group(1)), text, f'https://pubmed.ncbi.nlm.nih.gov/{pmid}/', detail)
