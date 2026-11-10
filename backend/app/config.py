@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     llm_tokens_per_minute: int = 8000
     # How long a reasoning model thinks before answering. Left empty, it is not sent (not every provider knows it).
     llm_reasoning_effort: str = 'low'
+    # A long session is first condensed into notes, part by part, then written as one pack. A smaller model
+    # takes the notes: it has its own allowance, so the main writer's is kept for the pack. Left empty, the
+    # main model takes the notes too.
+    condense_model: str = 'openai/gpt-oss-20b'
+    condense_tokens_per_minute: int = 8000
 
     # Not every provider offers speech-to-text, so transcription can use its own.
     # Left empty, it uses the same provider as the LLM.
@@ -42,6 +47,13 @@ class Settings(BaseSettings):
         base_url = self.transcribe_base_url or self.llm_base_url
         key = self.transcribe_api_key.get_secret_value() or self.llm_api_key.get_secret_value()
         return base_url, key
+
+    @property
+    def condenser(self) -> tuple[str, int]:
+        """The model that condenses long sessions, and its tokens per minute."""
+        if self.condense_model and self.condense_model != self.llm_model:
+            return self.condense_model, self.condense_tokens_per_minute
+        return self.llm_model, self.llm_tokens_per_minute
 
     @property
     def origins(self) -> list[str]:

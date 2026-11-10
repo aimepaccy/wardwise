@@ -59,6 +59,7 @@ class Strict(BaseModel):
 
 
 class TeachingPoint(Strict):
+    topic: str = Field(description='The condition or clinical problem this point belongs to, 1 to 4 words.')
     text: str = Field(description='One teaching point, one or two sentences.')
     quote: str = Field(description='Words copied exactly from the material that support this point.')
 
@@ -88,6 +89,64 @@ class PackDraft(Strict):
     flashcards: list[Flashcard]
     questions: list[Question]
     search_terms: list[str] = Field(description='Search terms for further reading. Never links or references.')
+
+
+# A long session is written in steps. First its parts are condensed into notes: teaching points, each with
+# an exact quote, and the signals that say why it matters, so the most important ones can be chosen.
+Signal = Literal['stressed', 'repeated', 'safety', 'exam']
+
+
+class CondensedPoint(Strict):
+    topic: str = Field(description='The condition or clinical problem this point belongs to, 1 to 4 words.')
+    text: str = Field(description='The teaching point in one sentence.')
+    quote: str = Field(description='Words copied exactly from the material that support this point.')
+    signals: list[Signal] = Field(description='Why it matters. Empty if none.')
+
+
+class CondensedPart(Strict):
+    # Written first, as a plan: listing every topic before the points makes a model less likely to skip one.
+    topics: list[str] = Field(description='Every topic taught in this part, in order, each once.')
+    points: list[CondensedPoint]
+
+
+# Then the pack is written from the numbered notes, in two calls, since the answers of both do not fit in one.
+# Items name the point they come from by its number instead of copying its quote (a reference, not a copy):
+# the answer is a third shorter, and WardWise fills in the point's exact quote itself.
+POINT = Field(description='The number of the note this comes from.')
+
+
+class NotedTeachingPoint(Strict):
+    topic: str = Field(description='The condition or clinical problem this point belongs to, 1 to 4 words.')
+    text: str = Field(description='One teaching point, one or two sentences.')
+    point: int = POINT
+
+
+class NotedFlashcard(Strict):
+    topic: str = Field(description='The topic this card is on, exactly as named in the list.')
+    front: str = Field(description='A question or prompt.')
+    back: str = Field(description='The answer, short.')
+    point: int = POINT
+
+
+class NotedQuestion(Strict):
+    # Named first, like the note-taker's topic list: it keeps the writer counting each topic's share.
+    topic: str = Field(description='The topic this question is on, exactly as named in the list.')
+    stem: str = Field(description='A short clinical scenario ending in a question.')
+    options: list[Option] = Field(description='Exactly five options, A to E.')
+    answer: Literal['A', 'B', 'C', 'D', 'E']
+    point: int = POINT
+
+
+class PackBodyDraft(Strict):
+    title: str
+    overview: list[str] = Field(description='Short paragraphs summarising the whole session, in order.')
+    summary: list[NotedTeachingPoint] = Field(description='The key teaching points.')
+    flashcards: list[NotedFlashcard]
+    search_terms: list[str] = Field(description='Search terms for further reading. Never links or references.')
+
+
+class QuizDraft(Strict):
+    questions: list[NotedQuestion]
 
 
 # What the browser receives: the AI's work plus WardWise's own checks.
@@ -157,6 +216,8 @@ class Limits(BaseModel):
     max_audio_mb: int
     max_photos: int
     max_photo_mb: int
-    # About how many words of material fit in one study pack with the provider's per-minute allowance.
+    # About how many words of material WardWise can write one study pack from.
     max_pack_words: int
     max_pack_chars: int
+    # Up to this, the pack is written in one go (under a minute); longer material is condensed first (minutes).
+    quick_pack_chars: int

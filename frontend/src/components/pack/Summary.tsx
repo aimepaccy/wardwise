@@ -2,6 +2,7 @@ import { motion } from 'motion/react'
 import { CircleCheck, Eye } from 'lucide-react'
 import { Source } from '@/components/pack/Source'
 import { plural } from '@/lib/format'
+import { groupByTopic } from '@/lib/topics'
 import type { StudyPack } from '@/types'
 
 export function Summary({ pack }: { pack: StudyPack }) {
@@ -25,26 +26,36 @@ export function Summary({ pack }: { pack: StudyPack }) {
 
       <section className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold">Key teaching points</h3>
-        <ul className="flex flex-col gap-2">
-          {pack.summary.map((point, index) => (
-            <motion.li
-              key={index}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.04 }}
-              className="flex gap-3 rounded-lg border bg-background/50 p-3 text-sm leading-relaxed"
-            >
-              <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-accent text-[0.7rem] font-semibold text-accent-foreground">
-                {index + 1}
-              </span>
-              <span className="flex flex-col gap-1">
-                {point.text}
-                {/* The quote stays out of sight (it still drives the checks); only a failed check is shown. */}
-                {!point.grounded && <Source quote={point.quote} grounded={false} />}
-              </span>
-            </motion.li>
-          ))}
-        </ul>
+        {/* A long round teaches several conditions, so its points sit under their topics. */}
+        {groupByTopic(pack.summary).map((group, groupIndex) => (
+          <div key={groupIndex} className="flex flex-col gap-2">
+            {group.topic && (
+              <h4 className="mt-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:mt-0">
+                {group.topic}
+              </h4>
+            )}
+            <ul className="flex flex-col gap-2">
+              {group.points.map(({ point, number }) => (
+                <motion.li
+                  key={number}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: number * 0.04 }}
+                  className="flex gap-3 rounded-lg border bg-background/50 p-3 text-sm leading-relaxed"
+                >
+                  <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-accent text-[0.7rem] font-semibold text-accent-foreground">
+                    {number}
+                  </span>
+                  <span className="flex flex-col gap-1">
+                    {point.text}
+                    {/* The quote stays out of sight (it still drives the checks); only a failed check is shown. */}
+                    {!point.grounded && <Source quote={point.quote} grounded={false} />}
+                  </span>
+                </motion.li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </section>
 
       {/* Coverage: the parts of the session no item in the pack quotes, for the student to read themselves. */}

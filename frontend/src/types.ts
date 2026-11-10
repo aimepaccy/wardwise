@@ -31,6 +31,8 @@ export type Limits = {
   max_photo_mb: number
   max_pack_words: number
   max_pack_chars: number
+  // Up to this, a pack is written in under a minute; longer sessions are condensed first and take minutes.
+  quick_pack_chars: number
 }
 
 // How much text a study pack would be written from, in characters (as the server measures it).
@@ -44,7 +46,8 @@ export type Materials = {
 }
 
 // Mirrors StudyPack in backend/app/schemas.py. `grounded` is WardWise's check that the quote is really in the material.
-export type TeachingPoint = { text: string; quote: string; grounded: boolean }
+// Packs written before 2026-11-10 have no topic.
+export type TeachingPoint = { topic?: string; text: string; quote: string; grounded: boolean }
 
 export type Flashcard = { front: string; back: string; quote: string; grounded: boolean }
 

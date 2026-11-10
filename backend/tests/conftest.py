@@ -62,7 +62,7 @@ def fake_pack(**changes) -> dict:
     pack = {
         'title': 'Acute asthma',
         'overview': ['The session covered oral steroids in acute asthma.'],
-        'summary': [{'text': 'Oral steroids for five days.', 'quote': 'for five days in acute asthma'}],
+        'summary': [{'topic': 'Acute asthma', 'text': 'Oral steroids for five days.', 'quote': 'for five days in acute asthma'}],
         'flashcards': [
             {'front': 'Steroid dose in acute asthma?', 'back': 'Prednisolone 40 mg', 'quote': 'prednisolone 40 mg once daily'},
             {'front': 'First-line biologic?', 'back': 'Omalizumab', 'quote': 'omalizumab is the first line biologic'},
@@ -80,9 +80,46 @@ def fake_pack(**changes) -> dict:
     return pack | changes
 
 
+def fake_points(*quotes: str, signals: tuple[str, ...] = ()) -> dict:
+    """What the note-taker might write for one part of a long session: one point per quote."""
+    return {
+        'topics': ['Acute asthma'],
+        'points': [
+            {'topic': 'Acute asthma', 'text': f'Point from: {quote}', 'quote': quote, 'signals': list(signals)}
+            for quote in quotes
+        ]
+    }
+
+
+def noted(pack: dict, *keys: str, point: int = 1) -> dict:
+    """A long session's writer names the note each item comes from instead of copying its quote."""
+    changed = {key: [{'topic': 'Acute asthma', **item, 'point': point} for item in pack[key]] for key in keys}
+    for items in changed.values():
+        for item in items:
+            item.pop('quote', None)
+    return {key: value for key, value in (pack | changed).items() if key != 'questions' or 'questions' in keys}
+
+
+# A valid answer for each form, so a stand-in call that is not given one still succeeds.
+DEFAULT_ANSWERS = {
+    'PackDraft': lambda: fake_pack(),
+    'PackBodyDraft': lambda: noted(fake_pack(), 'summary', 'flashcards'),
+    'QuizDraft': lambda: {'questions': noted(fake_pack(), 'questions')['questions']},
+    'CondensedPart': lambda: fake_points('for five days in acute asthma'),
+}
+
+
+@pytest.fixture(autouse=True)
+def no_waiting(monkeypatch):
+    """Tests never wait for the provider's allowance: there is no provider."""
+    from app import pacing
+
+    monkeypatch.setattr(pacing, 'reserve', lambda *args, **kwargs: None)
+
+
 @pytest.fixture(autouse=True)
 def fake_writer(monkeypatch):
-    """Stands in for the LLM: records each call and answers from a queue (a valid pack by default)."""
+    """Stands in for the LLM: records each call and answers from a queue (a valid answer for the form by default)."""
     import json
 
     from app import providers
@@ -90,9 +127,9 @@ def fake_writer(monkeypatch):
     calls = []
     answers = []
 
-    def write_json(instructions, material, form, max_tokens):
-        calls.append({'material': material})
-        answer = answers.pop(0) if answers else json.dumps(fake_pack())
+    def write_json(instructions, material, form, max_tokens, *, model=None, on_wait=None):
+        calls.append({'instructions': instructions, 'material': material, 'form': form.__name__, 'model': model})
+        answer = answers.pop(0) if answers else json.dumps(DEFAULT_ANSWERS[form.__name__]())
         if isinstance(answer, Exception):
             raise answer
         return answer, 1234

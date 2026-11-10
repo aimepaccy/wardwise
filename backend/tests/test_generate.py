@@ -110,20 +110,18 @@ def test_quotes_match_whole_words_only():
     assert not generate.is_grounded('sthma on the ward today', 'Asthma on the ward today.')
 
 
-def test_budget_follows_the_providers_limit(monkeypatch):
-    request = PackRequest(transcript='word ' * 1500)
-    material = generate.assemble(request)
-    generate.check_budget(material)  # fits in 8000 tokens a minute
-    monkeypatch.setenv('LLM_TOKENS_PER_MINUTE', '5000')
+def test_budget_follows_the_providers_limits(monkeypatch):
+    quick, most = generate.quick_chars(), generate.max_chars()
+    # A bigger allowance for the writer means more in one go; for the note-taker, longer sessions.
+    monkeypatch.setenv('LLM_TOKENS_PER_MINUTE', '16000')
+    monkeypatch.setenv('CONDENSE_TOKENS_PER_MINUTE', '16000')
     generate.get_settings.cache_clear()
     try:
-        try:
-            generate.check_budget(material)
-            raise AssertionError('should not fit in 5000 tokens a minute')
-        except generate.MaterialTooLong:
-            pass
+        assert generate.quick_chars() > quick
+        assert generate.max_chars() > most
     finally:
         monkeypatch.delenv('LLM_TOKENS_PER_MINUTE')
+        monkeypatch.delenv('CONDENSE_TOKENS_PER_MINUTE')
         generate.get_settings.cache_clear()
 
 
@@ -157,7 +155,9 @@ def test_quote_pieces_must_be_in_order_and_close():
 
 def test_links_are_removed_and_never_become_search_terms(fake_writer):
     pack = fake_pack(
-        summary=[{'text': 'See https://example.org/asthma for more.', 'quote': 'for five days in acute asthma'}],
+        summary=[
+            {'topic': 'Asthma', 'text': 'See https://example.org/asthma for more.', 'quote': 'for five days in acute asthma'}
+        ],
         search_terms=['acute asthma', 'www.example.com', 'doi: 10.1000/xyz123'],
     )
     fake_writer['answers'].append(json.dumps(pack))
@@ -174,7 +174,7 @@ def test_search_terms_are_ones_further_reading_can_look_up(fake_writer):
 
 
 def test_pack_without_teaching_points_is_tried_again_then_refused(fake_writer):
-    empty = json.dumps(fake_pack(summary=[{'text': ' ', 'quote': 'for five days in acute asthma'}]))
+    empty = json.dumps(fake_pack(summary=[{'topic': 'Asthma', 'text': ' ', 'quote': 'for five days in acute asthma'}]))
     fake_writer['answers'].extend([empty, empty])
     state = write(notes=FAKE_NOTES)
     assert state['status'] == 'failed'
@@ -201,7 +201,7 @@ def test_our_tags_inside_the_material_are_made_harmless():
 
 
 def test_too_long_advice_names_only_what_was_sent():
-    detail = client.post('/api/packs', json={'notes': 'wheeze ' * 2800}).json()['detail']
+    detail = client.post('/api/packs', json={'notes': 'wheeze ' * 12_000}).json()['detail']
     assert detail.endswith('Shorten your notes.')
 
 
@@ -284,7 +284,12 @@ def test_teaching_points_and_overview_are_returned_and_checked():
     pack = write(notes=FAKE_NOTES)['pack']
     assert pack['overview'] == ['The session covered oral steroids in acute asthma.']
     assert pack['summary'] == [
-        {'text': 'Oral steroids for five days.', 'quote': 'for five days in acute asthma', 'grounded': True}
+        {
+            'topic': 'Acute asthma',
+            'text': 'Oral steroids for five days.',
+            'quote': 'for five days in acute asthma',
+            'grounded': True,
+        }
     ]
 
 
@@ -322,7 +327,7 @@ def test_quote_across_two_passages_covers_both():
 
 
 def test_only_grounded_quotes_count_for_coverage(fake_writer):
-    invented = {'text': 'Give a sedative.', 'quote': 'sedation is safe and helps anxious patients settle'}
+    invented = {'topic': 'Asthma', 'text': 'Give a sedative.', 'quote': 'sedation is safe and helps anxious patients settle'}
     fake_writer['answers'].append(json.dumps(fake_pack(summary=[invented], flashcards=[], questions=[])))
     pack = write(transcript=SESSION)['pack']
     assert pack['summary'][0]['grounded'] is False

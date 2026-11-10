@@ -5,7 +5,9 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 const UPLOAD_TIMEOUT_MS = 5 * 60_000
 const CHECK_TIMEOUT_MS = 15_000
 const POLL_EVERY_MS = 1500
-const JOB_TIMEOUT_MS = 10 * 60_000
+// A long session is condensed part by part at the free allowance's pace: about a minute a part, so up to
+// about 10 minutes for 90 minutes of talk, more if another student is writing at the same time.
+const JOB_TIMEOUT_MS = 20 * 60_000
 // The server gives each reading source 12 seconds; a little more covers the trip there and back.
 const READING_TIMEOUT_MS = 20_000
 

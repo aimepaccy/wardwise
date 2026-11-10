@@ -6,7 +6,7 @@ WardWise turns ward-round teaching into a study pack. Record a teaching round an
 
 ![A WardWise study pack made from a role-played round on diabetic ketoacidosis](docs/screenshot.png)
 
-**Status:** a working MVP. WardWise records a round or accepts an audio file and transcribes it with Whisper, reads photos of handwritten notes, and writes the study pack straight away. Below the pack, doses, drug names and possible mishearings are highlighted, so you can correct what it heard and write again. Packs are saved in your browser, not on the server, and you can reopen, export and import them. Next: longer sessions, then a chat about the session (see `docs/plan.md`).
+**Status:** a working MVP. WardWise records a round or accepts an audio file and transcribes it with Whisper, reads photos of handwritten notes, and writes the study pack straight away. Below the pack, doses, drug names and possible mishearings are highlighted, so you can correct what it heard and write again. Sessions of up to about 90 minutes become one pack: a long round is condensed part by part, at the pace of the AI provider's free allowance, then written once, with its teaching points grouped by topic. Packs are saved in your browser, not on the server, and you can reopen, export and import them. Next: a chat about the session (see `docs/plan.md`).
 
 > WardWise is for teaching material only: role-played rounds and your own handwritten notes. Do not upload anything that could identify a patient.
 

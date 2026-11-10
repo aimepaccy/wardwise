@@ -43,8 +43,9 @@ def limits() -> Limits:
         max_audio_mb=MAX_AUDIO_MB,
         max_photos=MAX_PHOTOS,
         max_photo_mb=MAX_PHOTO_MB,
-        max_pack_words=generate.allowed_words(),
-        max_pack_chars=generate.allowed_chars(),
+        max_pack_words=generate.max_words(),
+        max_pack_chars=generate.max_chars(),
+        quick_pack_chars=generate.quick_chars(),
     )
 
 

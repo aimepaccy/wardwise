@@ -80,6 +80,8 @@ export function GenerateBar({
   // or text the student deleted, leaves an empty draft: writing stays off rather than sending nothing.
   const nothingRead = reviewing && !inputsChanged && !hasReviewable(sendState.materials)
   const noText = reviewing && !inputsChanged && packSize?.empty === true
+  // Over this, the pack is written in steps and takes minutes rather than seconds.
+  const long = limits !== null && packSize !== null && packSize.chars > limits.quick_pack_chars
   const enabled = chips.length > 0 && !busy && !recordingLive && !tooLong && !nothingRead && !noText
 
   // The pack is written first and checked after: the student's check comes last, once there is a pack.
@@ -125,9 +127,13 @@ export function GenerateBar({
     if (sendState.status === 'error') return sendState.message
     if (!reviewing || chips.length === 0) return null
     if (writeState.status === 'error' && !inputsChanged) return writeState.message
-    if (writeState.status === 'writing') return 'Writing usually takes under a minute.'
+    if (writeState.status === 'writing') {
+      return long
+        ? 'A long session: WardWise takes notes on each part first, so this takes a few minutes. Keep this page open.'
+        : 'Writing usually takes under a minute.'
+    }
     if (tooLong && limits) {
-      return `This is more than WardWise can write from at once (about ${limits.max_pack_words.toLocaleString()} words). Shorten your notes or the transcript.`
+      return `This is more than WardWise can write one pack from (about ${limits.max_pack_words.toLocaleString()} words). Shorten your notes or the transcript.`
     }
     if (askingToReplace) return 'Reading again replaces your corrections. Press "Yes, read again" to continue, or keep editing above.'
     if (inputsChanged) {

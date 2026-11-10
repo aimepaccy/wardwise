@@ -1,7 +1,7 @@
 """Background jobs: answer at once with a job number, do the slow work afterwards.
 
 Jobs and their results live only in this server's memory, and only until the browser
-collects them (or 15 minutes, if it never does).
+collects them (or 30 minutes after the job finishes, if it never does).
 """
 
 import logging
@@ -16,7 +16,10 @@ from pathlib import Path
 from app import extract, generate, providers
 from app.schemas import AudioKind, JobState, Materials, PackRequest
 
-RESULT_TTL_SECONDS = 15 * 60
+# A result waits this long for the browser after the job finishes. A job still running is given up only
+# after an hour, far past the longest a 90-minute session takes to write, even with others queued for the allowance.
+RESULT_TTL_SECONDS = 30 * 60
+MAX_RUN_SECONDS = 60 * 60
 # Every job's uploads live under this one folder, so leftovers can be found and removed.
 JOBS_ROOT = Path(tempfile.gettempdir()) / 'wardwise-jobs'
 
@@ -41,6 +44,7 @@ class JobInput:
 class Job:
     state: JobState
     created: float = field(default_factory=time.monotonic)
+    finished: float | None = None
 
 
 _jobs: dict[str, Job] = {}
@@ -88,12 +92,20 @@ def _update(job_id: str, **changes) -> None:
         job = _jobs.get(job_id)
         if job:
             job.state = job.state.model_copy(update=changes)
+            if job.state.status in ('done', 'failed') and job.finished is None:
+                job.finished = time.monotonic()
 
 
 def _forget_old() -> None:
-    cutoff = time.monotonic() - RESULT_TTL_SECONDS
+    now = time.monotonic()
+
+    def expired(job: Job) -> bool:
+        if job.finished is not None:
+            return job.finished < now - RESULT_TTL_SECONDS
+        return job.created < now - MAX_RUN_SECONDS
+
     with _lock:
-        for job_id in [job_id for job_id, job in _jobs.items() if job.created < cutoff]:
+        for job_id in [job_id for job_id, job in _jobs.items() if expired(job)]:
             del _jobs[job_id]
     sweep_folders(older_than_seconds=RESULT_TTL_SECONDS)
 
@@ -151,7 +163,7 @@ def write(job_id: str, request: PackRequest) -> None:
     started = time.monotonic()
     try:
         _update(job_id, status='working', step='Writing your study pack')
-        pack = generate.write_pack(request)
+        pack = generate.write_pack(request, on_step=lambda step: _update(job_id, step=step))
         _update(job_id, status='done', step='Done', pack=pack)
     except Exception as error:
         _fail(job_id, error, 'Something went wrong while writing your study pack.')

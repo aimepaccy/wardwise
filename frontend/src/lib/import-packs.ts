@@ -20,7 +20,7 @@ const studyPack = z
   .object({
     title: short,
     overview: z.array(long).max(50),
-    summary: z.array(z.object({ text: long, quote: long, grounded })).max(200),
+    summary: z.array(z.object({ topic: short.optional(), text: long, quote: long, grounded })).max(200),
     flashcards: z.array(z.object({ front: long, back: long, quote: long, grounded })).max(200),
     questions: z
       .array(

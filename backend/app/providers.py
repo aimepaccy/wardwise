@@ -1,12 +1,15 @@
 """The one place WardWise talks to an AI provider. Which provider is chosen in .env, not here."""
 
 import base64
+import json
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import openai
 from pydantic import BaseModel
 
+from app import pacing
 from app.config import get_settings
 
 # A short hint of the setting helps Whisper spell clinical terms and keep punctuation.
@@ -45,7 +48,7 @@ class PhotoCutShort(UnreadablePhoto):
 def _client(base_url: str, key: str, service: str) -> openai.OpenAI:
     if not key:
         raise ProviderError(f"WardWise's server has no AI key configured, so it cannot {service} yet.")
-    # Worst case, three tries of two minutes each stays inside the browser's ten-minute wait.
+    # Worst case for one call, three tries of two minutes each.
     return openai.OpenAI(base_url=base_url, api_key=key, timeout=120, max_retries=2)
 
 
@@ -54,6 +57,9 @@ def _translate(error: openai.APIError, service: str) -> ProviderError:
     if isinstance(error, openai.AuthenticationError):
         return ProviderError(f"The {service} service did not accept WardWise's key.")
     if isinstance(error, openai.RateLimitError):
+        # WardWise keeps to the per-minute allowance itself, so a refusal is often the daily one.
+        if 'per day' in str(error.message).lower():
+            return ProviderError(f"WardWise has used today's free allowance for the {service} service. Please try again later.")
         return ProviderError(f'The {service} service is busy. Please try again in a minute.')
     if isinstance(error, (openai.APIConnectionError, openai.APITimeoutError)):
         return ProviderError(f'WardWise could not reach the {service} service. Please try again.')
@@ -116,14 +122,27 @@ def handwriting_from(answer: str) -> str:
     return '' if text.strip('.').upper() == NO_HANDWRITING else text
 
 
-def write_json(instructions: str, material: str, form: type[BaseModel], max_tokens: int) -> tuple[str, int]:
-    """Ask the LLM to fill in `form` (structured output). Returns the raw JSON and the tokens used."""
+def write_json(
+    instructions: str,
+    material: str,
+    form: type[BaseModel],
+    max_tokens: int,
+    *,
+    model: tuple[str, int] | None = None,
+    on_wait: Callable[[int], None] | None = None,
+) -> tuple[str, int]:
+    """Ask the LLM to fill in `form` (structured output). Returns the raw JSON and the tokens used.
+    `model` is a model name and its tokens per minute; left out, it is the main writer."""
     settings = get_settings()
+    name, per_minute = model or (settings.llm_model, settings.llm_tokens_per_minute)
     client = _client(settings.llm_base_url, settings.llm_api_key.get_secret_value(), 'write')
     extra = {'reasoning_effort': settings.llm_reasoning_effort} if settings.llm_reasoning_effort else {}
+    schema = form.model_json_schema()
+    # Everything sent counts, the form included, and so does the room kept for the answer.
+    pacing.reserve(name, per_minute, pacing.estimate_tokens(instructions + material + json.dumps(schema)) + max_tokens, on_wait)
     try:
         response = client.chat.completions.create(
-            model=settings.llm_model,
+            model=name,
             messages=[
                 {'role': 'system', 'content': instructions},
                 {'role': 'user', 'content': material},
@@ -133,7 +152,7 @@ def write_json(instructions: str, material: str, form: type[BaseModel], max_toke
             max_tokens=max_tokens,
             response_format={
                 'type': 'json_schema',
-                'json_schema': {'name': form.__name__, 'strict': True, 'schema': form.model_json_schema()},
+                'json_schema': {'name': form.__name__, 'strict': True, 'schema': schema},
             },
             **extra,
         )

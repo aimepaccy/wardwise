@@ -57,8 +57,10 @@ def test_limits():
         'max_audio_mb': 25,
         'max_photos': 5,
         'max_photo_mb': 15,
-        'max_pack_words': 1616,
-        'max_pack_chars': 9700,
+        # About 85 to 90 minutes of talk, condensed first; up to about 12 minutes, written in one go.
+        'max_pack_words': 11491,
+        'max_pack_chars': 68950,
+        'quick_pack_chars': 9700,
     }
 
 
