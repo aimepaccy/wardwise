@@ -3,7 +3,7 @@
 **Read first:** `../_hub/PROFILE.md` and `../_hub/CONVENTIONS.md`. Then `PROGRESS.md` in this folder. The rules below add to those files. The full plan is in `docs/plan.md`.
 
 ## Goal
-WardWise is a web app MVP. A student records a (role-played) ward-round conversation, and takes photos of handwritten notes (slide upload is being removed, decided 2026-11-09, to keep WardWise to what happens on the ward). WardWise turns them into a study pack: a summary, flashcards, an exam-style quiz, a chat grounded in the session, and further reading from credible sources.
+WardWise is a web app MVP. A student records a (role-played) ward-round conversation, and takes photos of handwritten notes (slides and typed notes were removed on 2026-11-10, to keep WardWise to what happens on the ward). WardWise turns them into a study pack: a summary, flashcards, an exam-style quiz, a chat grounded in the session, and further reading from credible sources.
 
 End goal (restated 2026-11-02): recording real ward rounds. Role-play is the stage for now; real rounds come only after a separate privacy design and approval (see Rules and `docs/ideas.md`).
 

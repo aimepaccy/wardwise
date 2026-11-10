@@ -1,7 +1,7 @@
-import type { JobCreated, JobState, Limits, Materials, NotePhoto, Reading, Recording, SlideFile } from '@/types'
+import type { JobCreated, JobState, Limits, Materials, NotePhoto, Reading, Recording } from '@/types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
-// Long enough for a full set of slides on slow Wi-Fi.
+// Long enough for a long recording and five photos on slow Wi-Fi.
 const UPLOAD_TIMEOUT_MS = 5 * 60_000
 const CHECK_TIMEOUT_MS = 15_000
 const POLL_EVERY_MS = 1500
@@ -33,17 +33,10 @@ async function request<T>(path: string, init: RequestInit, timeoutMs: number, sl
   return response.json()
 }
 
-export function sendSession(
-  notes: string,
-  slides: SlideFile[],
-  recording: Recording | null,
-  photos: NotePhoto[],
-): Promise<JobCreated> {
+export function sendSession(recording: Recording | null, photos: NotePhoto[]): Promise<JobCreated> {
   // FormData becomes a multipart request. The browser sets the Content-Type header,
   // including the boundary that separates the parts, so we must not set it ourselves.
   const body = new FormData()
-  body.append('notes', notes)
-  for (const slide of slides) body.append('slides', slide.file)
   if (recording) body.append('audio', recording.file, recording.name)
   for (const photo of photos) body.append('photos', photo.file)
 
@@ -54,13 +47,9 @@ export function getLimits(): Promise<Limits> {
   return request<Limits>('/api/limits', {}, CHECK_TIMEOUT_MS)
 }
 
-// Plain JSON this time: only text goes, the student's notes and corrected copy of what WardWise heard and read.
-export function writePack(notes: string, materials: Materials): Promise<{ job_id: string }> {
-  const body = JSON.stringify({
-    notes,
-    transcript: materials.transcript,
-    slides: materials.slides.map((slide) => ({ text: slide.text })),
-  })
+// Plain JSON this time: only text goes, the student's corrected copy of what WardWise heard and read.
+export function writePack(materials: Materials): Promise<{ job_id: string }> {
+  const body = JSON.stringify({ notes: materials.notes ?? '', transcript: materials.transcript })
   return request('/api/packs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, CHECK_TIMEOUT_MS)
 }
 

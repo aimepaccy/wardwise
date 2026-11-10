@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app import generate, providers
 from app.main import app
-from app.schemas import MAX_TEXT_CHARS, PackDraft, PackRequest, SlideSource
+from app.schemas import MAX_TEXT_CHARS, PackDraft, PackRequest
 from tests.conftest import FAKE_NOTES, fake_pack
 
 # Kept before the stand-in replaces it, so a few tests can check what the real function sends.
@@ -38,17 +38,15 @@ def test_pack_is_written_and_checked(fake_writer):
     assert len(fake_writer['calls']) == 1
 
 
-def test_material_is_labelled_and_file_names_stay_here(fake_writer):
-    write(notes='Notes here.', transcript='Transcript here.', slides=[{'text': 'Slide text.'}, {'text': '  '}])
+def test_material_is_labelled(fake_writer):
+    write(notes='Notes here.', transcript='Transcript here.')
     material = fake_writer['calls'][0]['material']
     assert '<notes>\nNotes here.\n</notes>' in material
     assert '<transcript>\nTranscript here.\n</transcript>' in material
-    assert '<slides file="1">\nSlide text.\n</slides>' in material
-    assert 'file="2"' not in material  # empty slide text is left out
 
 
 def test_nothing_to_write_from():
-    response = client.post('/api/packs', json={'notes': '   ', 'transcript': '', 'slides': []})
+    response = client.post('/api/packs', json={'notes': '   ', 'transcript': ''})
     assert response.status_code == 422
 
 
@@ -113,7 +111,7 @@ def test_quotes_match_whole_words_only():
 
 
 def test_budget_follows_the_providers_limit(monkeypatch):
-    request = PackRequest(slides=[SlideSource(text='word ' * 1500)])
+    request = PackRequest(transcript='word ' * 1500)
     material = generate.assemble(request)
     generate.check_budget(material)  # fits in 8000 tokens a minute
     monkeypatch.setenv('LLM_TOKENS_PER_MINUTE', '5000')
@@ -143,7 +141,7 @@ def test_grounding_keeps_symbols_and_units():
     assert generate.is_grounded('saturations below < 92% on air', 'Saturations below <92% on air.')
 
 
-def test_grounding_handles_pdf_ligatures_and_subscripts():
+def test_grounding_handles_ligatures_and_subscripts():
     assert generate.is_grounded('airway inflammation drives the wheeze', 'Airway inﬂammation drives the wheeze.')
     assert generate.is_grounded('keep SpO2 between 94 and 98', 'Keep SpO₂ between 94 and 98.')
     assert generate.is_grounded('a life‑threatening attack needs help', 'A life-threatening attack needs help.')
@@ -277,9 +275,8 @@ def test_text_at_the_shown_limit_is_never_refused():
     # The browser counts the raw texts joined by line breaks; the server adds its tags. At the limit the
     # browser shows, with every part present, the server must still accept.
     limit = client.get('/api/limits').json()['max_pack_chars']
-    parts = 7  # notes, transcript, five slide files
-    size = (limit - (parts - 1)) // parts
-    body = {'notes': 'a' * size, 'transcript': 'b' * size, 'slides': [{'text': 'c' * size} for _ in range(5)]}
+    size = (limit - 1) // 2  # notes and transcript, joined by one line break
+    body = {'notes': 'a' * size, 'transcript': 'b' * size}
     assert client.post('/api/packs', json=body).status_code == 202
 
 

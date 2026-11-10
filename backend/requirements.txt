@@ -3,7 +3,5 @@ uvicorn[standard]
 python-multipart
 pydantic-settings
 openai
-pypdf
-python-pptx
 httpx2
 pillow

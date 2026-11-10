@@ -2,10 +2,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-SlideKind = Literal['pdf', 'pptx']
-
-# Same limit as the notes editor in the front end (NotesEditor.tsx).
-MAX_NOTES_CHARS = 20_000
 # Far above what fits in one study pack; the token budget is the real limit. This only stops absurd requests.
 MAX_TEXT_CHARS = 200_000
 AudioKind = Literal['webm', 'ogg', 'mp4', 'wav', 'mp3', 'flac']
@@ -14,12 +10,6 @@ PhotoKind = Literal['jpeg', 'png', 'webp']
 
 class Health(BaseModel):
     status: Literal['ok']
-
-
-class SlideReceipt(BaseModel):
-    name: str
-    kind: SlideKind
-    size_bytes: int
 
 
 class AudioReceipt(BaseModel):
@@ -35,24 +25,14 @@ class PhotoReceipt(BaseModel):
 
 
 class SessionReceipt(BaseModel):
-    notes_words: int
-    slides: list[SlideReceipt]
     audio: AudioReceipt | None
     photos: list[PhotoReceipt]
-
-
-class SlideText(BaseModel):
-    name: str
-    kind: SlideKind
-    pages: int
-    text: str
 
 
 class Materials(BaseModel):
     transcript: str | None
     # Handwritten notes as WardWise read them from photos, in the order the photos were added.
     notes: str | None = None
-    slides: list[SlideText]
     warnings: list[str]
 
 
@@ -64,17 +44,12 @@ class JobCreated(BaseModel):
     receipt: SessionReceipt
 
 
-# What the student sends to have a study pack written: their notes and their corrected copy of
-# what WardWise heard and read. Only text; the files themselves were deleted after reading.
-class SlideSource(BaseModel):
-    text: str = Field(max_length=MAX_TEXT_CHARS)
-
-
+# What the student sends to have a study pack written: their corrected copy of what WardWise heard
+# and read. Only text; the files themselves were deleted after reading.
 class PackRequest(BaseModel):
-    # Notes read from photos can run longer than typed notes; the word budget still applies.
+    # Notes as read from the photos; the word budget is the real limit.
     notes: str = Field('', max_length=MAX_TEXT_CHARS)
     transcript: str | None = Field(None, max_length=MAX_TEXT_CHARS)
-    slides: list[SlideSource] = Field(default_factory=list, max_length=5)
 
 
 # The form the AI fills in. `extra='forbid'` makes the JSON schema say "no other fields", which strict
@@ -179,12 +154,9 @@ class Reading(BaseModel):
 
 
 class Limits(BaseModel):
-    max_slide_files: int
-    max_slide_mb: int
     max_audio_mb: int
     max_photos: int
     max_photo_mb: int
-    max_notes_chars: int
     # About how many words of material fit in one study pack with the provider's per-minute allowance.
     max_pack_words: int
     max_pack_chars: int

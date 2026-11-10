@@ -14,20 +14,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app import extract, generate, providers
-from app.schemas import AudioKind, JobState, Materials, PackRequest, SlideKind, SlideText
+from app.schemas import AudioKind, JobState, Materials, PackRequest
 
 RESULT_TTL_SECONDS = 15 * 60
 # Every job's uploads live under this one folder, so leftovers can be found and removed.
 JOBS_ROOT = Path(tempfile.gettempdir()) / 'wardwise-jobs'
 
 log = logging.getLogger('wardwise.jobs')
-
-
-@dataclass
-class SlideInput:
-    path: Path
-    name: str
-    kind: SlideKind
 
 
 @dataclass
@@ -39,7 +32,6 @@ class PhotoInput:
 @dataclass
 class JobInput:
     folder: Path
-    slides: list[SlideInput]
     audio: Path | None = None
     audio_kind: AudioKind | None = None
     photos: list[PhotoInput] = field(default_factory=list)
@@ -106,23 +98,6 @@ def _forget_old() -> None:
     sweep_folders(older_than_seconds=RESULT_TTL_SECONDS)
 
 
-def _read_slides(slides: list[SlideInput], warnings: list[str]) -> list[SlideText]:
-    results = []
-    for slide in slides:
-        reader = extract.pdf_text if slide.kind == 'pdf' else extract.pptx_text
-        try:
-            text, pages = reader(slide.path)
-        except extract.UnreadableFile:
-            warnings.append(f'{slide.name} could not be read.')
-            continue
-        if not text:
-            warnings.append(f'{slide.name} has no text WardWise can read. It may contain pictures of slides.')
-        if pages > extract.MAX_PAGES:
-            warnings.append(f'{slide.name} is long, so WardWise read only the first {extract.MAX_PAGES} pages.')
-        results.append(SlideText(name=slide.name, kind=slide.kind, pages=pages, text=text))
-    return results
-
-
 def _read_photos(photos: list[PhotoInput], warnings: list[str]) -> str | None:
     pages = []
     for photo in photos:
@@ -151,11 +126,6 @@ def run(job_id: str, work: JobInput) -> None:
     started = time.monotonic()
     try:
         warnings: list[str] = []
-        slides = []
-        if work.slides:
-            _update(job_id, status='working', step='Reading the slides')
-            slides = _read_slides(work.slides, warnings)
-
         notes = None
         if work.photos:
             _update(job_id, status='working', step='Reading your handwritten notes')
@@ -168,7 +138,7 @@ def run(job_id: str, work: JobInput) -> None:
             if not transcript:
                 warnings.append('No speech was heard in the recording.')
 
-        materials = Materials(transcript=transcript, notes=notes, slides=slides, warnings=warnings)
+        materials = Materials(transcript=transcript, notes=notes, warnings=warnings)
         _update(job_id, status='done', step='Done', materials=materials)
     except Exception as error:
         _fail(job_id, error, 'Something went wrong while reading your material.')

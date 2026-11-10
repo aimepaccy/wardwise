@@ -1,13 +1,8 @@
-import zipfile
 from pathlib import PurePath
 
 from fastapi import UploadFile
 
-from app.schemas import AudioKind, PhotoKind, SlideKind
-
-MAX_SLIDE_FILES = 5
-MAX_SLIDE_MB = 25
-MAX_SLIDE_BYTES = MAX_SLIDE_MB * 1024 * 1024
+from app.schemas import AudioKind, PhotoKind
 
 # 25 MB is the long-standing direct-upload limit for Whisper; Groq lists larger limits only for paid plans.
 MAX_AUDIO_MB = 25
@@ -17,9 +12,6 @@ MAX_AUDIO_BYTES = MAX_AUDIO_MB * 1024 * 1024
 MAX_PHOTOS = 5
 MAX_PHOTO_MB = 15
 MAX_PHOTO_BYTES = MAX_PHOTO_MB * 1024 * 1024
-
-PDF_SIGNATURE = b'%PDF-'
-ZIP_SIGNATURE = b'PK\x03\x04'
 
 
 def detect_audio_kind(upload: UploadFile) -> AudioKind | None:
@@ -57,33 +49,6 @@ def detect_photo_kind(upload: UploadFile) -> PhotoKind | None:
     if start.startswith(b'RIFF') and start[8:12] == b'WEBP':
         return 'webp'
     return None
-
-
-def detect_slide_kind(upload: UploadFile) -> SlideKind | None:
-    """Identify a file by its content, not its name: a renamed file must not pass."""
-    upload.file.seek(0)
-    start = upload.file.read(1024)
-    upload.file.seek(0)
-
-    # The PDF standard allows the signature anywhere in the first 1024 bytes.
-    if PDF_SIGNATURE in start:
-        return 'pdf'
-    if start.startswith(ZIP_SIGNATURE) and _is_presentation(upload):
-        return 'pptx'
-    return None
-
-
-def _is_presentation(upload: UploadFile) -> bool:
-    # A .docx or .xlsx is also a zip; only PowerPoint files contain this entry.
-    # Listing names reads the zip's index without unpacking anything. A damaged zip
-    # can fail in several ways; all of them mean "not a presentation".
-    try:
-        with zipfile.ZipFile(upload.file) as archive:
-            return 'ppt/presentation.xml' in archive.namelist()
-    except (zipfile.BadZipFile, ValueError, OSError, EOFError):
-        return False
-    finally:
-        upload.file.seek(0)
 
 
 def display_name(upload: UploadFile) -> str:

@@ -54,7 +54,6 @@ const savedPack = z.object({
   material: z.object({
     notes: text(100_000),
     transcript: text(1_000_000).nullable(),
-    slides: z.array(z.object({ name: short, text: text(1_000_000) })).max(20),
   }),
 })
 
@@ -118,8 +117,8 @@ export function isGrounded(quote: string, source: string[]) {
 }
 
 function recheck(record: SavedPack): SavedPack {
-  const { notes, transcript, slides } = record.material
-  const source = words([notes, transcript ?? '', ...slides.map((slide) => slide.text)].join('\n'))
+  const { notes, transcript } = record.material
+  const source = words([notes, transcript ?? ''].join('\n'))
   const check = <T extends { quote: string; grounded: boolean }>(item: T): T => ({
     ...item,
     grounded: item.grounded && isGrounded(item.quote, source),

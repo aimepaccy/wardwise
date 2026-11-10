@@ -1,11 +1,9 @@
 import io
-import zipfile
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
-from pptx import Presentation
 
 from app import extract, jobs, providers
 from app.limits import BodySizeLimit
@@ -24,63 +22,16 @@ MP3_TAGGED = b'ID3\x04' + bytes(40)
 MP3_FRAME = b'\xff\xfb\x90\x64' + bytes(40)
 
 
-def office_zip(entry: str) -> bytes:
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, 'w') as archive:
-        archive.writestr(entry, '<xml/>')
-    return buffer.getvalue()
-
-
-def text_pdf(text: str) -> bytes:
-    """A real one-page PDF with the given text, built by hand."""
-    stream = f'BT /F1 18 Tf 50 700 Td ({text}) Tj ET'.encode()
-    objects = [
-        b'<< /Type /Catalog /Pages 2 0 R >>',
-        b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-        b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R '
-        b'/Resources << /Font << /F1 5 0 R >> >> >>',
-        b'<< /Length %d >>\nstream\n' % len(stream) + stream + b'\nendstream',
-        b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    ]
-    out = bytearray(b'%PDF-1.4\n')
-    offsets = []
-    for number, body in enumerate(objects, start=1):
-        offsets.append(len(out))
-        out += b'%d 0 obj\n' % number + body + b'\nendobj\n'
-    xref = len(out)
-    out += b'xref\n0 %d\n0000000000 65535 f \n' % (len(objects) + 1)
-    out += b''.join(b'%010d 00000 n \n' % offset for offset in offsets)
-    out += b'trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n' % (len(objects) + 1, xref)
-    return bytes(out)
-
-
-def text_pptx(title: str, notes: str) -> bytes:
-    deck = Presentation()
-    slide = deck.slides.add_slide(deck.slide_layouts[1])
-    slide.shapes.title.text = title
-    slide.notes_slide.notes_text_frame.text = notes
-    buffer = io.BytesIO()
-    deck.save(buffer)
-    return buffer.getvalue()
-
-
 def photo(kind: str = 'JPEG', size: tuple[int, int] = (40, 30), exif: Image.Exif | None = None) -> bytes:
     buffer = io.BytesIO()
     Image.new('RGB', size, 'white').save(buffer, kind, **({'exif': exif} if exif else {}))
     return buffer.getvalue()
 
 
-def post(
-    notes: str = '',
-    files: list[tuple[str, bytes]] | None = None,
-    audio: tuple[str, bytes] | None = None,
-    photos: list[tuple[str, bytes]] | None = None,
-):
-    parts = [('slides', (name, content)) for name, content in files or []]
-    if audio:
-        parts.append(('audio', audio))
+def post(audio: tuple[str, bytes] | None = None, photos: list[tuple[str, bytes]] | None = None):
+    parts = [('audio', audio)] if audio else []
     parts += [('photos', (name, content)) for name, content in photos or []]
-    return client.post('/api/sessions', data={'notes': notes}, files=parts or None)
+    return client.post('/api/sessions', files=parts or None)
 
 
 def receipt_of(response):
@@ -103,28 +54,19 @@ def test_health():
 
 def test_limits():
     assert client.get('/api/limits').json() == {
-        'max_slide_files': 5,
-        'max_slide_mb': 25,
         'max_audio_mb': 25,
         'max_photos': 5,
         'max_photo_mb': 15,
-        'max_notes_chars': 20_000,
-        'max_pack_words': 1591,
-        'max_pack_chars': 9550,
+        'max_pack_words': 1616,
+        'max_pack_chars': 9700,
     }
 
 
-def test_receipt_for_notes_and_slides():
-    pptx = office_zip('ppt/presentation.xml')
-    response = post('Asthma: wheeze, cough and chest tightness', [('a.pdf', PDF), ('b.pptx', pptx)])
-    assert receipt_of(response) == {
-        'notes_words': 6,
-        'slides': [
-            {'name': 'a.pdf', 'kind': 'pdf', 'size_bytes': len(PDF)},
-            {'name': 'b.pptx', 'kind': 'pptx', 'size_bytes': len(pptx)},
-        ],
-        'audio': None,
-        'photos': [],
+def test_receipt_for_audio_and_photos():
+    shot = photo()
+    assert receipt_of(post(audio=('rec.webm', WEBM), photos=[('page.jpg', shot)])) == {
+        'audio': {'name': 'rec.webm', 'kind': 'webm', 'size_bytes': len(WEBM)},
+        'photos': [{'name': 'page.jpg', 'kind': 'jpeg', 'size_bytes': len(shot)}],
     }
 
 
@@ -241,7 +183,7 @@ def test_audio_formats_from_browsers_are_accepted():
 
 
 def test_audio_only_is_enough():
-    assert receipt_of(post(audio=('rec.webm', WEBM)))['notes_words'] == 0
+    assert receipt_of(post(audio=('rec.webm', WEBM)))['photos'] == []
 
 
 def test_renamed_audio_is_rejected():
@@ -254,68 +196,44 @@ def test_audio_over_25_mb():
 
 
 def test_nothing_to_send():
-    assert post('   ').status_code == 422
+    assert post().status_code == 422
 
 
-def test_renamed_file_is_rejected():
-    response = post(files=[('slides.pdf', b'MZ\x90\x00 not a pdf')])
-    assert response.status_code == 415
+# Slides and typed notes were removed on purpose: WardWise works from the round and handwritten notes.
+def test_slides_and_typed_notes_are_not_accepted():
+    slides = client.post('/api/sessions', files=[('slides', ('a.pdf', PDF))])
+    typed = client.post('/api/sessions', data={'notes': 'Asthma: wheeze and cough'})
+    for response in (slides, typed):
+        assert response.status_code == 422
+        assert response.json()['detail'] == 'Add a recording or photos of your notes to send.'
+
+    # Sent alongside a recording, they are ignored: only the recording is read.
+    response = client.post(
+        '/api/sessions', data={'notes': 'typed'}, files=[('audio', ('rec.webm', WEBM)), ('slides', ('a.pdf', PDF))]
+    )
+    assert set(receipt_of(response)) == {'audio', 'photos'}
+    assert finished_job(response)['materials']['notes'] is None
 
 
-def test_word_document_renamed_to_pptx_is_rejected():
-    response = post(files=[('slides.pptx', office_zip('word/document.xml'))])
-    assert response.status_code == 415
+def test_request_cap_fits_the_largest_real_upload():
+    from app.config import Settings
+    from app.files import MAX_AUDIO_BYTES, MAX_PHOTO_BYTES, MAX_PHOTOS
+
+    largest = MAX_AUDIO_BYTES + MAX_PHOTOS * MAX_PHOTO_BYTES
+    cap = Settings.model_fields['max_request_mb'].default * 1024 * 1024
+    # One MB to spare covers the multipart boundaries and headers.
+    assert largest + 1024 * 1024 <= cap
 
 
-def test_damaged_zip_is_rejected():
-    damaged = office_zip('ppt/presentation.xml')[:-10]
-    assert post(files=[('slides.pptx', damaged)]).status_code == 415
-
-
-def test_pdf_signature_after_leading_bytes():
-    assert receipt_of(post(files=[('a.pdf', bytes(20) + PDF)]))['slides'][0]['kind'] == 'pdf'
-
-
-def test_too_many_files():
-    files = [(f'{n}.pdf', PDF) for n in range(6)]
-    assert post(files=files).status_code == 422
-
-
-def test_file_over_25_mb():
-    big = PDF + b'0' * (25 * 1024 * 1024)
-    assert post(files=[('big.pdf', big)]).status_code == 413
-
-
-def test_path_in_filename_is_stripped():
-    assert receipt_of(post(files=[('../../etc/a.pdf', PDF)]))['slides'][0]['name'] == 'a.pdf'
-
-
-def test_job_reads_slides_and_transcribes(fake_transcribe):
-    pdf = text_pdf('Peak flow below 50 percent means severe asthma')
-    pptx = text_pptx('Acute asthma', 'Ask about previous ICU admissions')
-    response = post('my notes', [('lecture.pdf', pdf), ('round.pptx', pptx)], audio=('round.webm', WEBM))
-
-    state = finished_job(response)
+def test_job_transcribes(fake_transcribe):
+    state = finished_job(post(audio=('round.webm', WEBM)))
     assert state['status'] == 'done'
-    materials = state['materials']
-    assert materials['transcript'] == FAKE_TRANSCRIPT
-    assert 'Peak flow below 50 percent' in materials['slides'][0]['text']
-    assert materials['slides'][0]['pages'] == 1
-    assert 'Acute asthma' in materials['slides'][1]['text']
-    assert 'Speaker notes: Ask about previous ICU admissions' in materials['slides'][1]['text']
-    assert materials['warnings'] == []
+    assert state['materials'] == {'transcript': FAKE_TRANSCRIPT, 'notes': None, 'warnings': []}
 
 
 def test_audio_reaches_the_provider_under_a_generic_name(fake_transcribe):
     finished_job(post(audio=('Ward round with Dr X.webm', WEBM)))
     assert fake_transcribe == [{'kind': 'webm', 'name': 'audio.webm', 'bytes': WEBM}]
-
-
-def test_slides_without_text_get_a_warning():
-    state = finished_job(post(files=[('scanned.pdf', text_pdf(''))]))
-    assert state['materials']['warnings'] == [
-        'scanned.pdf has no text WardWise can read. It may contain pictures of slides.'
-    ]
 
 
 def test_transcription_failure_is_explained(monkeypatch):
@@ -338,7 +256,7 @@ def test_uploads_are_deleted_when_the_job_ends(monkeypatch):
     original = jobs.new_folder
     monkeypatch.setattr(jobs, 'new_folder', lambda: folders.append(original()) or folders[-1])
 
-    finished_job(post(files=[('a.pdf', text_pdf('Hello'))], audio=('rec.webm', WEBM)))
+    finished_job(post(audio=('rec.webm', WEBM), photos=[('page.jpg', photo())]))
     assert len(folders) == 1
     assert not folders[0].exists()
 
@@ -369,34 +287,8 @@ def test_unexpected_errors_get_a_plain_message(monkeypatch):
     assert finished_job(post(audio=('rec.webm', WEBM)))['error'] == 'Something went wrong while reading your material.'
 
 
-def test_unreadable_pptx_gets_a_warning_not_a_failure():
-    broken = office_zip('ppt/presentation.xml')
-    state = finished_job(post('notes', [('broken.pptx', broken)]))
-    assert state['status'] == 'done'
-    assert state['materials']['warnings'] == ['broken.pptx could not be read.']
-
-
-def test_pptx_tables_groups_and_line_breaks_are_read():
-    from pptx.util import Inches
-
-    deck = Presentation()
-    slide = deck.slides.add_slide(deck.slide_layouts[6])
-    table = slide.shapes.add_table(2, 2, Inches(1), Inches(1), Inches(4), Inches(1)).table
-    table.cell(0, 0).text, table.cell(0, 1).text = 'Severity', 'PEF'
-    table.cell(1, 0).text, table.cell(1, 1).text = 'Acute severe', '33 to 50%'
-    group = slide.shapes.add_group_shape()
-    group.shapes.add_textbox(Inches(1), Inches(3), Inches(3), Inches(1)).text_frame.text = 'Oxygen\vSalbutamol'
-    buffer = io.BytesIO()
-    deck.save(buffer)
-
-    text = finished_job(post(files=[('table.pptx', buffer.getvalue())]))['materials']['slides'][0]['text']
-    assert 'Severity | PEF' in text
-    assert 'Acute severe | 33 to 50%' in text
-    assert 'Oxygen\nSalbutamol' in text
-
-
 def test_finished_results_are_forgotten_once_collected():
-    job_id = post('notes').json()['job_id']
+    job_id = post(audio=('rec.webm', WEBM)).json()['job_id']
     assert client.get(f'/api/jobs/{job_id}').status_code == 200
     assert client.get(f'/api/jobs/{job_id}').status_code == 404
 

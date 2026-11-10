@@ -26,7 +26,7 @@ uploads/
 *.aac
 *.flac
 
-# Test slides (often someone else's copyrighted material)
+# Documents (often someone else's copyrighted material); WardWise no longer reads them
 *.pptx
 *.pdf
 

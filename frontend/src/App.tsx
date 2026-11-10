@@ -12,27 +12,21 @@ import { NotesPhotos } from '@/components/NotesPhotos'
 import { PackView, type SaveStatus } from '@/components/PackView'
 import { PrivacyNotice } from '@/components/PrivacyNotice'
 import { Recorder } from '@/components/Recorder'
-import { SlideDropZone } from '@/components/SlideDropZone'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useLeaveWarning } from '@/hooks/use-leave-warning'
 import { useLimits } from '@/hooks/use-limits'
-import { useNotesDraft } from '@/hooks/use-notes-draft'
 import { useTheme } from '@/hooks/use-theme'
 import { ApiError, sendSession, waitForJob, writePack } from '@/lib/api'
 import { hasCorrections, needsCheck } from '@/lib/materials'
 import { stagger } from '@/lib/motion'
 import { StorageError, askToKeepPacks, newRecord, savePack, type SavedPack } from '@/lib/storage'
-import type { Materials, NotePhoto, Recording, SendState, SlideFile, WriteState } from '@/types'
+import type { Materials, NotePhoto, Recording, SendState, WriteState } from '@/types'
 
 export default function App() {
   const { theme, chooseTheme } = useTheme()
   const limits = useLimits()
-  // Typed notes gave way to photos of handwritten notes. A draft typed in an earlier version is
-  // never sent; the hook stays so that "Delete all" still clears it.
-  const [, setNotes] = useNotesDraft()
   const [recording, setRecording] = useState<Recording | null>(null)
   const [recordingLive, setRecordingLive] = useState(false)
-  const [slides, setSlides] = useState<SlideFile[]>([])
   const [photos, setPhotos] = useState<NotePhoto[]>([])
   const [sendState, setSendState] = useState<SendState>({ status: 'idle' })
   // The student's corrected copy of what WardWise heard and read; the AI will write from this.
@@ -76,12 +70,12 @@ export default function App() {
     forgetWrite()
     let materials: Materials
     try {
-      const { job_id, receipt } = await sendSession('', slides, recording, photos)
+      const { job_id, receipt } = await sendSession(recording, photos)
       setSendState({ status: 'working', step: 'Waiting to start', receipt })
       const job = await waitForJob(job_id, (step) => setSendState({ status: 'working', step, receipt }))
       if (!job.materials) throw new ApiError('WardWise could not read your material.')
       materials = job.materials
-      setSendState({ status: 'ready', materials, recording, slides, photos })
+      setSendState({ status: 'ready', materials, recording, photos })
       setDraft(materials)
     } catch (error) {
       setSendState({ status: 'error', message: messageOf(error) })
@@ -101,15 +95,10 @@ export default function App() {
     update({ status: 'writing', step: 'Sending to WardWise' })
     let record: SavedPack
     try {
-      const notes = materials.notes ?? ''
-      const { job_id } = await writePack(notes, materials)
+      const { job_id } = await writePack(materials)
       const job = await waitForJob(job_id, (step) => update({ status: 'writing', step }))
       if (!job.pack) throw new ApiError('WardWise could not write your study pack.')
-      record = newRecord(job.pack, {
-        notes,
-        transcript: materials.transcript,
-        slides: materials.slides.map(({ name, text }) => ({ name, text })),
-      })
+      record = newRecord(job.pack, { notes: materials.notes ?? '', transcript: materials.transcript })
     } catch (error) {
       update({ status: 'error', message: messageOf(error) })
       return
@@ -137,22 +126,20 @@ export default function App() {
     setShown((current) => (current?.record.id === id ? null : current))
   }
 
-  // "Delete all" is the clean-up for a shared computer, so it takes the notes too.
   function handleDeletedAll() {
     setShown(null)
-    setNotes('')
   }
 
-  // Adding or removing a slide makes a new list, and a new recording is a new object, so comparing
+  // Adding or removing a photo makes a new list, and a new recording is a new object, so comparing
   // them with what WardWise read tells us whether the panel still matches the inputs.
   const inputsChanged =
     sendState.status === 'ready' &&
-    (sendState.recording !== recording || sendState.slides !== slides || sendState.photos !== photos)
+    (sendState.recording !== recording || sendState.photos !== photos)
   const corrected = sendState.status === 'ready' && draft !== null && hasCorrections(sendState.materials, draft)
   const packText = draft
-    ? [draft.notes ?? '', draft.transcript ?? '', ...draft.slides.map((slide) => slide.text)].join('\n')
+    ? [draft.notes ?? '', draft.transcript ?? ''].join('\n')
     : ''
-  const packSize = draft ? { chars: packText.length } : null
+  const packSize = draft ? { chars: packText.length, empty: packText.trim() === '' } : null
   const showPanel = sendState.status === 'ready' && needsCheck(sendState.materials)
 
   // Ask before a reload or closed tab throws away work that exists only in this page: a job under way,
@@ -188,20 +175,14 @@ export default function App() {
           />
           <Hero />
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          {/* The two ways in, side by side on wide screens and the same height, so neither leaves a gap. */}
+          <div className="grid gap-6 md:grid-cols-2">
             <Recorder recording={recording} onChange={setRecording} onLiveChange={setRecordingLive} />
-            <motion.div variants={stagger} className="flex flex-col gap-6">
-              <NotesPhotos
-                photos={photos}
-                onAdd={(added) => setPhotos((current) => [...current, ...added])}
-                onRemove={(id) => setPhotos((current) => current.filter((photo) => photo.id !== id))}
-              />
-              <SlideDropZone
-                files={slides}
-                onAdd={(added) => setSlides((current) => [...current, ...added])}
-                onRemove={(id) => setSlides((current) => current.filter((slide) => slide.id !== id))}
-              />
-            </motion.div>
+            <NotesPhotos
+              photos={photos}
+              onAdd={(added) => setPhotos((current) => [...current, ...added])}
+              onRemove={(id) => setPhotos((current) => current.filter((photo) => photo.id !== id))}
+            />
           </div>
 
           {showPanel && sendState.status === 'ready' && draft && (
@@ -225,7 +206,6 @@ export default function App() {
             photoCount={photos.length}
             recording={recording}
             recordingLive={recordingLive}
-            slideCount={slides.length}
             sendState={sendState}
             inputsChanged={inputsChanged}
             corrected={corrected}

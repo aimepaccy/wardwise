@@ -2,13 +2,13 @@
 
 *Every ward round, turned into a lesson.*
 
-WardWise turns ward-round teaching into a study pack. Record a teaching round, take photos of your handwritten notes, or add the slides, and about a minute later you have a summary, flashcards, an exam-style quiz and further reading from credible sources. Every teaching point carries a quote that WardWise checks against the session itself.
+WardWise turns ward-round teaching into a study pack. Record a teaching round and take photos of your handwritten notes, and about a minute later you have a summary, flashcards, an exam-style quiz and further reading from credible sources. Every teaching point carries a quote that WardWise checks against the session itself.
 
 ![A WardWise study pack made from a role-played round on diabetic ketoacidosis](docs/screenshot.png)
 
-**Status:** a working MVP. WardWise records a round or accepts an audio file and transcribes it with Whisper, reads photos of handwritten notes and PDF or PowerPoint slides, lets you correct what it heard and read, and writes the study pack. Packs are saved in your browser, not on the server, and you can reopen, export and import them. Next: hosting behind an access code, then a chat about the session (see `docs/plan.md`).
+**Status:** a working MVP. WardWise records a round or accepts an audio file and transcribes it with Whisper, reads photos of handwritten notes, lets you correct what it heard and read, and writes the study pack. Packs are saved in your browser, not on the server, and you can reopen, export and import them. Next: packs written straight from a recording, longer sessions, then a chat about the session (see `docs/plan.md`).
 
-> WardWise is for teaching material only: role-played rounds, lectures, and your own notes. Do not upload anything that could identify a patient.
+> WardWise is for teaching material only: role-played rounds and your own handwritten notes. Do not upload anything that could identify a patient.
 
 ## How it works
 - **Front end:** React, Tailwind CSS, shadcn/ui, Motion

@@ -14,7 +14,7 @@ type LibraryProps = {
   onOpenPack: (record: SavedPack) => void
   // The shown pack closes when it is deleted.
   onDeleted: (id: string) => void
-  // Everything WardWise saved in this browser is gone: packs and the notes draft.
+  // Everything WardWise saved in this browser is gone: the packs and the notes they were written from.
   onDeletedAll: () => void
 }
 
@@ -64,7 +64,7 @@ export function Library({ version, onOpenPack, onDeleted, onDeletedAll }: Librar
     }
   }, [open, version, reloads])
 
-  // The chance to undo a deletion lasts a few seconds, like clearing the notes.
+  // The chance to undo a deletion lasts a few seconds.
   useEffect(() => {
     if (!notice?.undo) return
     const timer = window.setTimeout(() => {

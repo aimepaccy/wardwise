@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from 'react'
 import { motion } from 'motion/react'
-import { AlertTriangle, ChevronRight, FileText, Mic, NotebookPen, Presentation, ScanText, Undo2, X } from 'lucide-react'
+import { AlertTriangle, Mic, NotebookPen, ScanText, Undo2, X } from 'lucide-react'
 import { Panel } from '@/components/Panel'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -22,7 +22,7 @@ export function MaterialsPanel({ heard, draft, locked, onChange, onClose }: Mate
   const [confirmingClose, setConfirmingClose] = useState(false)
   const closeRef = useRef<HTMLButtonElement>(null)
   const confirmTextId = useId()
-  const { transcript, notes, slides, warnings } = draft
+  const { transcript, notes, warnings } = draft
 
   function requestClose() {
     if (hasCorrections(heard, draft)) setConfirmingClose(true)
@@ -34,10 +34,6 @@ export function MaterialsPanel({ heard, draft, locked, onChange, onClose }: Mate
     closeRef.current?.focus()
   }
 
-  function setSlideText(index: number, text: string) {
-    onChange({ ...draft, slides: slides.map((slide, i) => (i === index ? { ...slide, text } : slide)) })
-  }
-
   return (
     <motion.div initial="hidden" animate="show">
       <Panel
@@ -46,7 +42,7 @@ export function MaterialsPanel({ heard, draft, locked, onChange, onClose }: Mate
         description={
           hasReviewable(heard)
             ? 'Correct anything WardWise got wrong. Your study pack is written from your corrected version. Transcripts and notes are read by AI and can contain mistakes.'
-            : 'WardWise could not read your files. Try adding them again, or other ones.'
+            : 'WardWise could not read your recording or photos. Try again, with clearer photos or another recording.'
         }
         aside={
           <Button ref={closeRef} variant="ghost" size="icon" onClick={requestClose} aria-label="Close what WardWise heard and read">
@@ -126,42 +122,6 @@ export function MaterialsPanel({ heard, draft, locked, onChange, onClose }: Mate
               />
             </section>
           )}
-
-          {slides.map((slide, index) => {
-            // Two files can share a name; the position tells them apart for screen readers.
-            const sameName = slides.filter((other) => other.name === slide.name).length > 1
-            const label = `Text of ${slide.name}${sameName ? ` (file ${index + 1})` : ''}`
-            return (
-              <details key={index} className="group rounded-lg border bg-background/50">
-                <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg p-3 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden">
-                  <ChevronRight
-                    className="size-4 text-muted-foreground transition-transform group-open:rotate-90"
-                    aria-hidden="true"
-                  />
-                  {slide.kind === 'pdf' ? (
-                    <FileText className="size-4 text-muted-foreground" aria-hidden="true" />
-                  ) : (
-                    <Presentation className="size-4 text-muted-foreground" aria-hidden="true" />
-                  )}
-                  <span className="min-w-0 truncate">{slide.name}</span>
-                  <span className="shrink-0 font-normal text-muted-foreground">
-                    · {plural(slide.pages, slide.kind === 'pdf' ? 'page' : 'slide')} · {plural(countWords(slide.text), 'word')}
-                    {slide.text !== heard.slides[index]?.text && ', corrected by you'}
-                  </span>
-                </summary>
-                <div className="px-3 pb-3">
-                  <EditableText
-                    value={slide.text}
-                    original={heard.slides[index]?.text ?? ''}
-                    label={label}
-                    placeholder="No text found."
-                    locked={locked}
-                    onChange={(text) => setSlideText(index, text)}
-                  />
-                </div>
-              </details>
-            )
-          })}
         </div>
       </Panel>
     </motion.div>

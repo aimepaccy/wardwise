@@ -1,9 +1,3 @@
-export type SlideFile = {
-  id: string
-  file: File
-  kind: 'pdf' | 'pptx'
-}
-
 // A photo of handwritten notes. The order they were added is the order of the pages.
 export type NotePhoto = {
   id: string
@@ -20,8 +14,6 @@ export type Recording = {
 
 // Mirrors SessionReceipt in backend/app/schemas.py.
 export type SessionReceipt = {
-  notes_words: number
-  slides: { name: string; kind: SlideFile['kind']; size_bytes: number }[]
   audio: { name: string; kind: string; size_bytes: number } | null
   photos: { name: string; kind: string; size_bytes: number }[]
 }
@@ -34,24 +26,20 @@ export type JobCreated = {
 
 // Mirrors Limits in backend/app/schemas.py.
 export type Limits = {
-  max_slide_files: number
-  max_slide_mb: number
   max_audio_mb: number
   max_photos: number
   max_photo_mb: number
-  max_notes_chars: number
   max_pack_words: number
   max_pack_chars: number
 }
 
 // How much text a study pack would be written from, in characters (as the server measures it).
-export type PackSize = { chars: number }
+export type PackSize = { chars: number; empty: boolean }
 
 export type Materials = {
   transcript: string | null
   // Handwritten notes as WardWise read them from the photos.
   notes: string | null
-  slides: { name: string; kind: SlideFile['kind']; pages: number; text: string }[]
   warnings: string[]
 }
 
@@ -120,6 +108,6 @@ export type SendState =
   | { status: 'sending' }
   | { status: 'working'; step: string; receipt: SessionReceipt }
   // `materials` is what WardWise produced, kept unchanged; the student's corrections live in App.
-  // `recording`, `slides` and `photos` are the inputs WardWise read, to notice if they change afterwards.
-  | { status: 'ready'; materials: Materials; recording: Recording | null; slides: SlideFile[]; photos: NotePhoto[] }
+  // `recording` and `photos` are the inputs WardWise read, to notice if they change afterwards.
+  | { status: 'ready'; materials: Materials; recording: Recording | null; photos: NotePhoto[] }
   | { status: 'error'; message: string }

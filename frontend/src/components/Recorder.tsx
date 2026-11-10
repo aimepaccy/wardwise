@@ -130,7 +130,7 @@ export function Recorder({ recording, onChange, onLiveChange }: RecorderProps) {
           <Lamp state={lamp} pulse={!reduceMotion} />
         </div>
         <Cassette label={tapeLabel} wound={Math.min(1, wound)} spinning={mic.status === 'recording' || playing} />
-        <div className="mt-3 flex items-stretch gap-3">
+        <div className="mt-3 flex h-20 items-stretch gap-3 sm:h-24">
           <Counter seconds={seconds} />
           <VuMeter active={mic.status === 'recording'} readLevel={mic.readLevel} />
         </div>
@@ -329,7 +329,7 @@ function Cassette({ label, wound, spinning }: { label: string; wound: number; sp
     <Sketch
       viewBox="0 0 240 132"
       size={1 / WEIGHT}
-      className="w-full"
+      className="max-h-52 w-full"
       overlay={
         <>
           <text x="26" y="26" className="fill-foreground font-ink text-[11px]">

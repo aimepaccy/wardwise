@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { AlertCircle, Camera, NotebookPen, X } from 'lucide-react'
+import { AlertCircle, Camera, Check, NotebookPen, X } from 'lucide-react'
 import { NotesCamera } from '@/components/NotesCamera'
 import { NotesSketch } from '@/components/NotesSketch'
 import { Panel } from '@/components/Panel'
@@ -13,6 +13,8 @@ import type { NotePhoto } from '@/types'
 const MAX_PHOTOS = 5
 const MAX_MB = 15
 const TYPES = ['image/jpeg', 'image/png', 'image/webp']
+// Clear photos are read more accurately, and misread doses are the costly mistakes.
+const TIPS = ['Lay the page flat in good light', 'One page per photo, filling the frame', 'Write doses and units clearly']
 let nextId = 0
 
 type NotesPhotosProps = {
@@ -88,11 +90,11 @@ export function NotesPhotos({ photos, onAdd, onRemove }: NotesPhotosProps) {
             whileTap={{ scale: 0.99 }}
             transition={spring}
             className={cn(
-              'hand-radius flex w-full flex-col items-center gap-2 border-2 border-dashed px-4 py-5 text-center transition-colors outline-none focus-visible:ring-4 focus-visible:ring-ring/30',
+              'hand-radius flex w-full flex-1 flex-col items-center justify-center gap-2 border-2 border-dashed px-4 py-5 text-center transition-colors outline-none focus-visible:ring-4 focus-visible:ring-ring/30',
               dragging ? 'border-primary bg-accent' : 'border-input hover:border-primary/50 hover:bg-accent/40',
             )}
           >
-            <NotesSketch replay={dragging} className="h-24 w-auto" />
+            <NotesSketch replay={dragging} className="h-24 w-auto lg:h-32" />
             <span className="text-sm font-medium">
               {dragging ? 'Drop to add' : (
                 <>
@@ -104,6 +106,14 @@ export function NotesPhotos({ photos, onAdd, onRemove }: NotesPhotosProps) {
               One photo a page, up to {MAX_PHOTOS}. No patient names or details in the photo.
             </span>
           </motion.button>
+          <ul className="mt-3 grid gap-1 text-xs text-muted-foreground">
+            {TIPS.map((tip) => (
+              <li key={tip} className="flex items-center gap-1.5">
+                <Check className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                {tip}
+              </li>
+            ))}
+          </ul>
           <input
             ref={inputRef}
             type="file"

@@ -1,6 +1,6 @@
 import { useState, type Ref } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { AlertCircle, AlertTriangle, CheckCircle2, Loader2, Mic, NotebookPen, Presentation, RefreshCw, Sparkles } from 'lucide-react'
+import { AlertCircle, AlertTriangle, CheckCircle2, Loader2, Mic, NotebookPen, RefreshCw, Sparkles } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { formatDuration, formatFileSize, plural } from '@/lib/format'
 import { hasReviewable, needsCheck } from '@/lib/materials'
@@ -14,9 +14,8 @@ type GenerateBarProps = {
   photoCount: number
   recording: Recording | null
   recordingLive: boolean
-  slideCount: number
   sendState: SendState
-  // True when the recording or slides changed after WardWise read them.
+  // True when the recording or photos changed after WardWise read them.
   inputsChanged: boolean
   // True when the student has corrected what WardWise heard and read.
   corrected: boolean
@@ -29,15 +28,10 @@ type GenerateBarProps = {
   onDismiss: () => void
 }
 
-function describeReceipt({ notes_words, slides, audio, photos }: SessionReceipt) {
+function describeReceipt({ audio, photos }: SessionReceipt) {
   const parts = []
-  if (notes_words > 0) parts.push(`${plural(notes_words, 'word')} of notes`)
   if (audio) parts.push(`a recording (${formatFileSize(audio.size_bytes)})`)
   if (photos.length > 0) parts.push(`${plural(photos.length, 'photo')} of notes`)
-  if (slides.length > 0) {
-    const bytes = slides.reduce((total, slide) => total + slide.size_bytes, 0)
-    parts.push(`${plural(slides.length, 'slide file')} (${formatFileSize(bytes)})`)
-  }
   const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0]
   return `WardWise received ${list}.`
 }
@@ -47,7 +41,6 @@ export function GenerateBar({
   photoCount,
   recording,
   recordingLive,
-  slideCount,
   sendState,
   inputsChanged,
   corrected,
@@ -73,7 +66,6 @@ export function GenerateBar({
     },
     recordingLive && { key: 'live', icon: Mic, label: 'Recording in progress: stop it to send' },
     photoCount > 0 && { key: 'photos', icon: NotebookPen, label: `${plural(photoCount, 'photo')} of notes` },
-    slideCount > 0 && { key: 'slides', icon: Presentation, label: plural(slideCount, 'slide file') },
   ].filter((chip) => chip !== false && chip !== null)
 
   // Over the limit, writing is switched off before a request is wasted. The server checks again anyway.
@@ -81,12 +73,15 @@ export function GenerateBar({
     reviewing && !inputsChanged && limits !== null && packSize !== null && packSize.chars > limits.max_pack_chars
 
   // While the student reviews, the button writes the study pack, or reads again if the inputs changed.
-  // Every photo or file failing leaves nothing to write from, so only reading again can help.
+  // Every photo failing leaves nothing to write from, so only reading again can help. A silent recording,
+  // or text the student deleted, leaves an empty draft: writing stays off rather than sending nothing.
   const nothingRead = reviewing && !inputsChanged && !hasReviewable(sendState.materials)
-  const enabled = chips.length > 0 && !busy && !recordingLive && !tooLong && !nothingRead
+  const noText = reviewing && !inputsChanged && packSize?.empty === true
+  const enabled = chips.length > 0 && !busy && !recordingLive && !tooLong && !nothingRead && !noText
 
-  // Check is skipped when there is nothing to check.
-  const willCheck = reviewing ? needsCheck(sendState.materials) : recording !== null || slideCount > 0 || photoCount > 0
+  // Check is skipped when there is nothing to check. Every reading now gives text or a warning, so this
+  // path is unused until packs are written straight from a recording (the next build).
+  const willCheck = reviewing ? needsCheck(sendState.materials) : recording !== null || photoCount > 0
   const steps: StepKey[] = willCheck ? ['upload', 'read', 'check', 'write'] : ['upload', 'read', 'write']
 
   function stepNow(): StepKey | 'done' | null {
@@ -133,15 +128,16 @@ export function GenerateBar({
     if (writeState.status === 'error' && !inputsChanged) return writeState.message
     if (writeState.status === 'writing') return 'Writing usually takes under a minute.'
     if (tooLong && limits) {
-      return `This is more than WardWise can write from at once (about ${limits.max_pack_words.toLocaleString()} words). Shorten your notes, the transcript or the slide text.`
+      return `This is more than WardWise can write from at once (about ${limits.max_pack_words.toLocaleString()} words). Shorten your notes or the transcript.`
     }
     if (askingToReplace) return 'Reading again replaces your corrections. Press "Yes, read again" to continue, or keep editing above.'
     if (inputsChanged) {
       const loss = corrected ? '; this replaces your corrections' : ''
-      return `Your recording, photos or slides changed after WardWise read them. Read again to include the changes${loss}.`
+      return `Your recording or photos changed after WardWise read them. Read again to include the changes${loss}.`
     }
     if (writeState.status === 'done') return 'Your study pack is ready below. Correct the text above and write again if you need to.'
-    if (nothingRead) return 'WardWise could not read anything from this material. See the notes above, then try clearer photos or another file.'
+    if (nothingRead) return 'WardWise could not read anything from this material. See the notes above, then try clearer photos or another recording.'
+    if (noText) return 'There is no text to write from. See the notes above, then undo your changes or read again.'
     return 'WardWise has read your material. Correct anything it got wrong above, then write your study pack.'
   }
 
@@ -176,7 +172,7 @@ export function GenerateBar({
                   exit={{ opacity: 0 }}
                   className="text-sm text-muted-foreground"
                 >
-                  Record a round, or add photos of your notes or slides, to begin.
+                  Record a round or add photos of your notes to begin.
                 </motion.p>
               ) : (
                 chips.map(({ key, icon: Icon, label }) => (

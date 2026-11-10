@@ -26,7 +26,7 @@ const pack: StudyPack = {
   model: 'test-model',
 }
 
-const material = { notes: 'Keep saturations 94 to 98 percent.', transcript: 'Give nebulised salbutamol now.', slides: [] }
+const material = { notes: 'Keep saturations 94 to 98 percent.', transcript: 'Give nebulised salbutamol now.' }
 
 function recordAt(savedAt: string, title = pack.title): SavedPack {
   return { ...newRecord({ ...pack, title }, material), savedAt }
@@ -142,7 +142,7 @@ describe('export and import', () => {
 
   it('checks the quotes again, and only ever downgrades them', async () => {
     const record = recordAt('2026-10-13T09:00:00.000Z')
-    record.material = { notes: 'Keep oxygen saturations 94 to 98 percent in acute asthma.', transcript: null, slides: [] }
+    record.material = { notes: 'Keep oxygen saturations 94 to 98 percent in acute asthma.', transcript: null }
     record.pack = {
       ...pack,
       summary: [
@@ -155,9 +155,30 @@ describe('export and import', () => {
     expect((await listPacks())[0].pack.summary.map((point) => point.grounded)).toEqual([true, false, false])
   })
 
+  // Slides were removed in November 2026, on purpose without backward compatibility: an older backup
+  // still imports, but its slide text is dropped, so a quote found only there is no longer vouched for.
+  it('imports an older backup with slides, dropping the slide text', async () => {
+    const record = recordAt('2026-10-13T09:00:00.000Z')
+    const old = {
+      ...record,
+      material: { ...material, slides: [{ name: 'asthma.pptx', text: 'Magnesium sulfate 2 g over 20 minutes' }] },
+      pack: {
+        ...pack,
+        summary: [
+          { text: 'From the notes', quote: 'Keep saturations 94 to 98', grounded: true },
+          { text: 'From a slide', quote: 'magnesium sulfate 2 g over 20 minutes', grounded: true },
+        ],
+      },
+    }
+    await importPacks(await exportedFile([old as SavedPack]))
+    const [imported] = await listPacks()
+    expect(imported.material).toEqual(material)
+    expect(imported.pack.summary.map((point) => point.grounded)).toEqual([true, false])
+  })
+
   it('keeps symbols when checking quotes, so "< 92%" is not "> 92%"', async () => {
     const record = recordAt('2026-10-13T09:00:00.000Z')
-    record.material = { notes: 'Life threatening if SpO₂ < 92% on air.', transcript: null, slides: [] }
+    record.material = { notes: 'Life threatening if SpO₂ < 92% on air.', transcript: null }
     record.pack = {
       ...pack,
       summary: [

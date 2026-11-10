@@ -4,7 +4,7 @@ import pytest
 
 # Tests use fixed settings, whatever is in the developer's own .env.
 os.environ['ALLOWED_ORIGINS'] = 'http://localhost:5173'
-os.environ['MAX_REQUEST_MB'] = '160'
+os.environ['MAX_REQUEST_MB'] = '110'
 # No real key, so no test can ever reach the AI provider.
 os.environ['LLM_API_KEY'] = ''
 os.environ['TRANSCRIBE_API_KEY'] = ''

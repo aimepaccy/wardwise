@@ -3,12 +3,11 @@ import type { StudyPack } from '@/types'
 
 // Study packs live in this browser's IndexedDB, never on WardWise's server. Export is the student's backup copy.
 
-// The text a pack was written from (notes and the corrected transcript and slide text), kept with the pack
+// The text a pack was written from (the corrected notes and transcript), kept with the pack
 // so the student keeps their own words, and so the chat in phase 8 can answer from them.
 export type PackMaterial = {
   notes: string
   transcript: string | null
-  slides: { name: string; text: string }[]
 }
 
 export type SavedPack = {
