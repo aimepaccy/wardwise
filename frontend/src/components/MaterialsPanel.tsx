@@ -1,11 +1,12 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
+import { Popover } from 'radix-ui'
 import { AlertTriangle, ChevronDown, Mic, NotebookPen, PenLine, ScanText, Undo2, X, type LucideIcon } from 'lucide-react'
 import { Panel } from '@/components/Panel'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { countWords, plural } from '@/lib/format'
-import { countMarks, findMarks, type Mark, type MarkKind } from '@/lib/highlight'
+import { findMarks, replaceWord, type Mark } from '@/lib/highlight'
 import { hasCorrections, hasReviewable } from '@/lib/materials'
 import { cn } from '@/lib/utils'
 import type { Materials } from '@/types'
@@ -23,23 +24,15 @@ type MaterialsPanelProps = {
   onClose: () => void
 }
 
-const MARK_STYLE: Record<MarkKind, string> = {
-  number: 'bg-warning/20 text-foreground',
-  drug: 'bg-accent text-accent-foreground',
-  check: 'bg-destructive/15 text-foreground underline decoration-destructive decoration-wavy underline-offset-2',
-}
-
-const LEGEND: { kind: MarkKind; label: string }[] = [
-  { kind: 'number', label: 'Numbers and doses' },
-  { kind: 'drug', label: 'Drug names' },
-  { kind: 'check', label: 'Close to a drug name: check it' },
-]
+const INK = { number: 'ink ink-dose', drug: 'ink ink-drug', check: 'ink ink-check' } as const
 
 export function MaterialsPanel({ heard, draft, locked, attention, onChange, onClose }: MaterialsPanelProps) {
   // Until the student opens or folds it, the panel is open exactly when it needs attention.
   const [userOpen, setUserOpen] = useState<boolean | null>(null)
   const open = userOpen ?? attention
   const [confirmingClose, setConfirmingClose] = useState(false)
+  // Words the student said were heard right, so they are no longer flagged.
+  const [kept, setKept] = useState<ReadonlySet<string>>(new Set())
   const rootRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   const bodyId = useId()
@@ -60,15 +53,11 @@ export function MaterialsPanel({ heard, draft, locked, attention, onChange, onCl
   // Two memos, so a keystroke in one text does not redo the other.
   const transcriptMarks = useMemo(() => (transcript ? findMarks(transcript) : []), [transcript])
   const notesMarks = useMemo(() => (notes ? findMarks(notes) : []), [notes])
-  const marks = { transcript: transcriptMarks, notes: notesMarks }
-  const counts = countMarks([...marks.transcript, ...marks.notes])
-  // A misheard word said many times is one thing to check.
-  const misheard = new Set(
-    [
-      ...marks.transcript.map((mark) => mark.kind === 'check' && transcript?.slice(mark.start, mark.end).toLowerCase()),
-      ...marks.notes.map((mark) => mark.kind === 'check' && notes?.slice(mark.start, mark.end).toLowerCase()),
-    ].filter(Boolean),
-  ).size
+  const unkept = (text: string | null, marks: Mark[]) =>
+    marks.filter((mark) => mark.kind !== 'check' || !kept.has(text?.slice(mark.start, mark.end).toLowerCase() ?? ''))
+  const marks = { transcript: unkept(transcript, transcriptMarks), notes: unkept(notes, notesMarks) }
+  const all = [...marks.transcript, ...marks.notes]
+  const anyChecks = all.some((mark) => mark.kind === 'check')
 
   function requestClose() {
     if (hasCorrections(heard, draft)) {
@@ -82,38 +71,29 @@ export function MaterialsPanel({ heard, draft, locked, attention, onChange, onCl
     closeRef.current?.focus()
   }
 
-  const highlighted = [
-    counts.numbers > 0 && plural(counts.numbers, 'number'),
-    counts.drugs > 0 && plural(counts.drugs, 'drug name'),
-  ].filter(Boolean)
-  const summary = [
-    highlighted.length > 0 && `${highlighted.join(' and ')} highlighted`,
-    misheard > 0 && plural(misheard, 'word') + ' to check',
-  ].filter(Boolean)
-  // Before any pack is written from this reading, the advice is to correct first.
-  const advice = attention
-    ? 'Mistakes here end up in your pack: correct them before you write.'
-    : 'Mistakes here end up in your pack: correct them, then write again.'
+  function keep(word: string) {
+    setKept((current) => new Set(current).add(word.toLowerCase()))
+  }
+
+  // What the student sees, folded or open: what this is and what is marked, without counting.
+  const description = !hasReviewable(heard)
+    ? 'WardWise could not read your recording or photos. Try again, with clearer photos or another recording.'
+    : [
+        'Your pack was written from this text',
+        all.length > 0 ? ', with doses and drug names highlighted.' : '.',
+        anyChecks ? ' Some words may have been misheard.' : '',
+      ].join('')
+  const preview = transcript ?? notes
 
   return (
     <motion.div ref={rootRef} initial="hidden" animate="show" className="scroll-mt-6">
       <Panel
         icon={ScanText}
-        title="Check what WardWise heard and read"
-        description={
-          hasReviewable(heard)
-            ? `${summary.length ? `${summary.join(', ')}. ` : ''}${advice}`
-            : 'WardWise could not read your recording or photos. Try again, with clearer photos or another recording.'
-        }
+        title="What WardWise heard and read"
+        description={attention && hasReviewable(heard) ? 'Check and correct this text before WardWise writes your pack.' : description}
         aside={
           <div className="flex shrink-0 items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-expanded={open}
-              aria-controls={bodyId}
-              onClick={() => setUserOpen(!open)}
-            >
+            <Button variant="ghost" size="sm" aria-expanded={open} aria-controls={bodyId} onClick={() => setUserOpen(!open)}>
               {open ? 'Hide' : 'Show'}
               <ChevronDown className={cn('transition-transform', open && 'rotate-180')} aria-hidden="true" />
             </Button>
@@ -138,67 +118,84 @@ export function MaterialsPanel({ heard, draft, locked, attention, onChange, onCl
           </ul>
         )}
 
-        <div id={bodyId} hidden={!open} className="flex flex-col gap-4">
-            {confirmingClose && (
-              <div
-                role="alertdialog"
-                aria-labelledby={confirmTextId}
-                onKeyDown={(event) => event.key === 'Escape' && keepEditing()}
-                className="flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm"
-              >
-                <span id={confirmTextId} className="flex-1">
-                  Closing loses your corrections.
-                </span>
-                <Button size="sm" variant="outline" onClick={keepEditing} autoFocus>
-                  Keep editing
-                </Button>
-                <Button size="sm" variant="destructive" onClick={onClose}>
-                  Close anyway
-                </Button>
-              </div>
-            )}
+        {/* Folded, a glimpse of the text itself invites a look; it opens the panel. */}
+        {!open && preview && (
+          <button
+            type="button"
+            onClick={() => setUserOpen(true)}
+            aria-label="Show what WardWise heard and read"
+            className="group relative block w-full rounded-md text-left text-sm leading-relaxed text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <span className="line-clamp-2 [mask-image:linear-gradient(to_bottom,black_45%,transparent)]">
+              <MarkedText text={preview} marks={preview === transcript ? marks.transcript : marks.notes} />
+            </span>
+          </button>
+        )}
 
-            {hasReviewable(heard) && (
-              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="What the highlights mean">
-                {LEGEND.map(({ kind, label }) => (
-                  <li key={kind} className="flex items-center gap-1.5">
-                    <span className={cn('inline-block size-3 rounded-sm', MARK_STYLE[kind])} aria-hidden="true" />
-                    {label}
-                  </li>
-                ))}
-              </ul>
-            )}
+        <div id={bodyId} hidden={!open} className="flex flex-col gap-5">
+          {confirmingClose && (
+            <div
+              role="alertdialog"
+              aria-labelledby={confirmTextId}
+              onKeyDown={(event) => event.key === 'Escape' && keepEditing()}
+              className="flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm"
+            >
+              <span id={confirmTextId} className="flex-1">
+                Closing loses your corrections.
+              </span>
+              <Button size="sm" variant="outline" onClick={keepEditing} autoFocus>
+                Keep editing
+              </Button>
+              <Button size="sm" variant="destructive" onClick={onClose}>
+                Close anyway
+              </Button>
+            </div>
+          )}
 
-            {transcript !== null && (
-              <TextSection
-                icon={Mic}
-                title="Recording transcript"
-                detail={`${plural(countWords(transcript), 'word')} · AI-generated${transcript !== heard.transcript ? ', corrected by you' : ''}`}
-                text={transcript}
-                original={heard.transcript ?? ''}
-                marks={marks.transcript}
-                placeholder="No speech was heard."
-                question="did they say"
-                locked={locked}
-                onChange={(text) => onChange({ ...draft, transcript: text })}
-              />
-            )}
+          {all.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              <span className={INK.number}>Doses and numbers</span>, <span className={INK.drug}>drug names</span>
+              {anyChecks && (
+                <>
+                  {' '}and <span className={INK.check}>words to check</span>: tap one to fix it in a moment
+                </>
+              )}
+              .
+            </p>
+          )}
 
-            {notes !== null && (
-              <TextSection
-                icon={NotebookPen}
-                title="Handwritten notes"
-                detail={`${plural(countWords(notes), 'word')} · read by AI${notes !== heard.notes ? ', corrected by you' : ''}`}
-                text={notes}
-                original={heard.notes ?? ''}
-                marks={marks.notes}
-                placeholder="No handwriting was found."
-                question="is this"
-                locked={locked}
-                onChange={(text) => onChange({ ...draft, notes: text })}
-              />
-            )}
-          </div>
+          {transcript !== null && (
+            <TextSection
+              icon={Mic}
+              title="Recording transcript"
+              detail={`${plural(countWords(transcript), 'word')} · AI-generated${transcript !== heard.transcript ? ', corrected by you' : ''}`}
+              text={transcript}
+              original={heard.transcript ?? ''}
+              marks={marks.transcript}
+              placeholder="No speech was heard."
+              source="speech"
+              locked={locked}
+              onChange={(text) => onChange({ ...draft, transcript: text })}
+              onKeep={keep}
+            />
+          )}
+
+          {notes !== null && (
+            <TextSection
+              icon={NotebookPen}
+              title="Handwritten notes"
+              detail={`${plural(countWords(notes), 'word')} · read by AI${notes !== heard.notes ? ', corrected by you' : ''}`}
+              text={notes}
+              original={heard.notes ?? ''}
+              marks={marks.notes}
+              placeholder="No handwriting was found."
+              source="handwriting"
+              locked={locked}
+              onChange={(text) => onChange({ ...draft, notes: text })}
+              onKeep={keep}
+            />
+          )}
+        </div>
       </Panel>
     </motion.div>
   )
@@ -212,23 +209,23 @@ type TextSectionProps = {
   original: string
   marks: Mark[]
   placeholder: string
-  // How to ask about a word close to a drug name: "did they say" for speech, "is this" for handwriting.
-  question: string
+  source: 'speech' | 'handwriting'
   locked: boolean
   onChange: (text: string) => void
+  onKeep: (word: string) => void
 }
 
 // Read with highlights, or correct in a plain text box: a text box cannot show highlights.
-function TextSection({ icon: Icon, title, detail, text, original, marks, placeholder, question, locked, onChange }: TextSectionProps) {
+function TextSection({ icon: Icon, title, detail, text, original, marks, placeholder, source, locked, onChange, onKeep }: TextSectionProps) {
   const [editing, setEditing] = useState(false)
+  const regionRef = useRef<HTMLDivElement>(null)
   // Writing locks the text; afterwards it opens in the read view, so the box does not grab focus on its return.
   if (locked && editing) setEditing(false)
-  // One line per misheard word, however often it was said.
-  const checks = new Map<string, { suggestion: string; times: number }>()
-  for (const mark of marks) {
-    if (mark.kind !== 'check' || !mark.suggestion) continue
-    const word = text.slice(mark.start, mark.end).toLowerCase()
-    checks.set(word, { suggestion: mark.suggestion, times: (checks.get(word)?.times ?? 0) + 1 })
+
+  // The checked word disappears once fixed or kept, so focus goes back to the text.
+  function settle(action: () => void) {
+    action()
+    regionRef.current?.focus()
   }
 
   return (
@@ -250,49 +247,116 @@ function TextSection({ icon: Icon, title, detail, text, original, marks, placeho
       {editing && !locked ? (
         <EditableText value={text} original={original} label={title} placeholder={placeholder} onChange={onChange} />
       ) : (
-        <HighlightedText text={text} marks={marks} label={title} placeholder={placeholder} />
-      )}
-
-      {checks.size > 0 && (
-        <ul className="flex flex-col gap-1 text-xs">
-          {[...checks].map(([word, { suggestion, times }]) => (
-            <li key={word} className="flex items-start gap-1.5">
-              <AlertTriangle className="mt-px size-3.5 shrink-0 text-destructive" aria-hidden="true" />
-              <span>
-                “{word}”{times > 1 && ` (${times} times)`}: {question} <strong>{suggestion}</strong>?
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div
+          ref={regionRef}
+          tabIndex={0}
+          role="region"
+          aria-label={title}
+          className="ink-sweep max-h-96 overflow-y-auto rounded-lg border bg-background/60 px-4 py-3 text-[0.94rem] leading-loose whitespace-pre-wrap outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        >
+          {text.trim() ? (
+            <MarkedText
+              text={text}
+              marks={marks}
+              check={(mark, word) => (
+                <WordCheck
+                  word={word}
+                  suggestion={mark.suggestion!}
+                  source={source}
+                  locked={locked}
+                  onFix={() => settle(() => onChange(replaceWord(text, word, mark.suggestion!)))}
+                  onKeep={() => settle(() => onKeep(word))}
+                />
+              )}
+            />
+          ) : (
+            <span className="text-muted-foreground">{placeholder}</span>
+          )}
+        </div>
       )}
     </section>
   )
 }
 
-function HighlightedText({ text, marks, label, placeholder }: { text: string; marks: Mark[]; label: string; placeholder: string }) {
+// The text with its marks. A word to check becomes a button when `check` is given; in the folded
+// preview it is only marked.
+function MarkedText({ text, marks, check }: { text: string; marks: Mark[]; check?: (mark: Mark, word: string) => ReactNode }) {
   const parts: ReactNode[] = []
   let at = 0
-  for (const mark of marks) {
+  marks.forEach((mark, order) => {
     parts.push(text.slice(at, mark.start))
+    const word = text.slice(mark.start, mark.end)
+    const style = { '--order': Math.min(order, 30) } as CSSProperties
     parts.push(
-      <mark key={mark.start} className={cn('rounded-sm px-0.5', MARK_STYLE[mark.kind])}>
-        {text.slice(mark.start, mark.end)}
-      </mark>,
+      // Only a word with a suggestion can be checked; anything else is just marked.
+      mark.kind === 'check' && mark.suggestion && check ? (
+        <span key={mark.start} style={style} className="contents">
+          {check(mark, word)}
+        </span>
+      ) : (
+        <mark key={mark.start} style={style} className={INK[mark.kind]}>
+          {word}
+        </mark>
+      ),
     )
     at = mark.end
-  }
+  })
   parts.push(text.slice(at))
+  return <>{parts}</>
+}
 
+type WordCheckProps = {
+  word: string
+  suggestion: string
+  source: 'speech' | 'handwriting'
+  locked: boolean
+  onFix: () => void
+  onKeep: () => void
+}
+
+// A word close to a drug name: tap it to change it to the drug, or keep it as it was.
+function WordCheck({ word, suggestion, source, locked, onFix, onKeep }: WordCheckProps) {
+  const question = source === 'speech' ? 'Did they say' : 'Is this'
   return (
-    // Focusable so the keyboard can scroll a long transcript.
-    <div
-      tabIndex={0}
-      role="region"
-      aria-label={label}
-      className="max-h-80 overflow-y-auto rounded-md border bg-background/60 px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-    >
-      {text.trim() ? parts : <span className="text-muted-foreground">{placeholder}</span>}
-    </div>
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className={cn(INK.check, 'rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40')}
+          aria-label={`${word}: ${question.toLowerCase()} ${suggestion}?`}
+        >
+          {word}
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="top"
+          sideOffset={8}
+          collisionPadding={12}
+          className="z-50 flex w-64 flex-col gap-3 rounded-xl border bg-popover p-3.5 text-sm text-popover-foreground shadow-lg outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+        >
+          <p>
+            {question} <strong className="font-semibold text-primary">{suggestion}</strong>?
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              WardWise {source === 'speech' ? 'heard' : 'read'} “{word}”, which is close to this drug name.
+            </span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Popover.Close asChild>
+              <Button size="sm" onClick={onFix} disabled={locked}>
+                Change to {suggestion}
+              </Button>
+            </Popover.Close>
+            <Popover.Close asChild>
+              <Button size="sm" variant="ghost" onClick={onKeep}>
+                Keep as {source === 'speech' ? 'heard' : 'written'}
+              </Button>
+            </Popover.Close>
+          </div>
+          <Popover.Arrow className="fill-popover" />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   )
 }
 
@@ -323,7 +387,7 @@ function EditableText({ value, original, label, placeholder, onChange }: Editabl
         aria-label={label}
         placeholder={placeholder}
         autoFocus
-        className="max-h-80 min-h-32 resize-y overflow-y-auto bg-background/60 leading-relaxed"
+        className="max-h-96 min-h-32 resize-y overflow-y-auto bg-background/60 leading-relaxed"
       />
       {value !== original && (
         <button

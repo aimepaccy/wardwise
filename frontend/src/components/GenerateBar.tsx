@@ -19,6 +19,8 @@ type GenerateBarProps = {
   inputsChanged: boolean
   // True when the student has corrected what WardWise heard and read.
   corrected: boolean
+  // True when there are corrections the pack on screen was not written from.
+  correctionsPending: boolean
   writeState: WriteState
   // The text a study pack would be written from, and the server's limits (null until known).
   packSize: PackSize | null
@@ -44,6 +46,7 @@ export function GenerateBar({
   sendState,
   inputsChanged,
   corrected,
+  correctionsPending,
   writeState,
   packSize,
   limits,
@@ -131,6 +134,7 @@ export function GenerateBar({
       const loss = corrected ? '; this replaces your corrections' : ''
       return `Your recording or photos changed after WardWise read them. Read again to include the changes${loss}.`
     }
+    if (writeState.status === 'done' && correctionsPending) return 'Your corrections are not in the pack yet. Write again to include them.'
     if (writeState.status === 'done') {
       return sendState.materials.warnings.length > 0
         ? 'Your study pack is ready, but WardWise could not read everything: see the warnings below it.'

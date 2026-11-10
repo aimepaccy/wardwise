@@ -224,6 +224,7 @@ export default function App() {
             sendState={sendState}
             inputsChanged={inputsChanged}
             corrected={corrected}
+            correctionsPending={correctionsAtRisk}
             writeState={writeState}
             packSize={packSize}
             limits={limits}

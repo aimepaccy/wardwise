@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countMarks, editDistance, findMarks, nearestDrug } from '@/lib/highlight'
+import { editDistance, findMarks, nearestDrug, replaceWord } from '@/lib/highlight'
 
 function marked(text: string) {
   return findMarks(text).map((mark) => [text.slice(mark.start, mark.end), mark.kind, mark.suggestion].filter(Boolean))
@@ -24,8 +24,11 @@ describe('finding the words to check', () => {
     ])
   })
 
-  it('counts each kind', () => {
-    expect(countMarks(findMarks(HEARD))).toEqual({ numbers: 5, drugs: 2, checks: 1 })
+  it('marks doses said in words, decimals included', () => {
+    expect(marked('two point five milligrams, then one and a half tablets')).toEqual([
+      ['two point five milligrams', 'number'],
+      ['one and a half tablets', 'number'],
+    ])
   })
 
   it('keeps decimals and rates together', () => {
@@ -105,5 +108,13 @@ describe('near misses', () => {
     expect(editDistance('ipertropium', 'ipratropium')).toBe(2)
     expect(editDistance('kitten', 'sitting')).toBe(3)
     expect(editDistance('same', 'same')).toBe(0)
+  })
+})
+
+describe('fixing a word', () => {
+  it('changes every whole-word use and keeps capitals', () => {
+    expect(replaceWord('Ipertropium now; ipertropium later; not ipertropiums.', 'ipertropium', 'ipratropium')).toBe(
+      'Ipratropium now; ipratropium later; not ipertropiums.',
+    )
   })
 })

@@ -18,8 +18,9 @@ for (const drug of DRUG_NAMES) {
 
 // Not inside a word ("SpO2", "B12"); a leading point is kept, since ".5 mg" read as "5 mg" is the error that matters.
 const NUMBER = String.raw`(?<![\p{L}\d.])\.?\d+(?:[.,]\d+)?`
-const WORD_NUMBER =
-  'half|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|hundred'
+const DIGIT_WORD = 'zero|one|two|three|four|five|six|seven|eight|nine'
+// Doses said in words, decimals included ("two point five milligrams", "one and a half tablets").
+const WORD_NUMBER = String.raw`(?:half|${DIGIT_WORD}|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|hundred)(?:\s+point\s+(?:${DIGIT_WORD})|\s+and\s+a\s+half)?`
 const UNIT = [
   '%', 'percent', 'mg', 'milligrams?', 'mcg', 'µg', 'μg', 'ug', 'micrograms?', 'g', 'grams?', 'kg', 'kilograms?',
   'ml', 'millilitres?', 'milliliters?', 'l', 'litres?', 'liters?', 'mmol', 'millimoles?', 'units?', 'iu',
@@ -123,10 +124,11 @@ function withoutOverlaps(marks: Mark[]): Mark[] {
   return kept
 }
 
-export function countMarks(marks: Mark[]) {
-  return {
-    numbers: marks.filter((mark) => mark.kind === 'number').length,
-    drugs: marks.filter((mark) => mark.kind === 'drug').length,
-    checks: marks.filter((mark) => mark.kind === 'check').length,
-  }
+// Every whole-word use of `word` becomes `replacement`, keeping a capital first letter where there was one.
+export function replaceWord(text: string, word: string, replacement: string) {
+  if (!word || !replacement) return text
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.replace(new RegExp(String.raw`(?<![\p{L}])${escaped}(?![\p{L}])`, 'giu'), (found) =>
+    found[0] === found[0].toUpperCase() ? replacement[0].toUpperCase() + replacement.slice(1) : replacement,
+  )
 }
