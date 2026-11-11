@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { newRecord, type SavedPack } from '@/lib/storage'
-import { groupByWeek, isOver, topicsOf, weekName, weekQuiz, weekRange, weekStart, type Week } from '@/lib/weeks'
+import type { SavedWeek } from '@/lib/storage'
+import {
+  fingerprint,
+  groupByWeek,
+  highlightsBasis,
+  highlightsRequest,
+  isOver,
+  planHighlights,
+  topicsOf,
+  weekName,
+  weekQuiz,
+  weekRange,
+  weekStart,
+  type Week,
+} from '@/lib/weeks'
 import type { Question, StudyPack } from '@/types'
 
 // The tests run in Kigali time (set in vite.config.ts), so these local dates mean the same on any machine.
@@ -136,5 +150,85 @@ describe('topics of a pack', () => {
 
   it('has none for a pack written before topics existed, or with blank ones', () => {
     expect(topicsOf(packAt('2026-11-09T09:00:00.000Z', 'Old', [], ['', '  ']))).toEqual([])
+  })
+})
+
+describe('what the highlights are written from', () => {
+  it('sends each session with its day, and only its checked points, numbered by session', () => {
+    const monday = packAt('2026-11-09T09:00:00.000Z', 'Asthma', [], ['Treatment', 'Assessment'])
+    monday.pack.summary[1].grounded = false
+    const wednesday = packAt('2026-11-11T09:00:00.000Z', 'Malaria', [], ['Fluids'])
+    const request = highlightsRequest({ key: '2026-11-09', start: new Date(2026, 10, 9), packs: [monday, wednesday] })
+    expect(request.sessions).toEqual([
+      { day: 'Monday', title: 'Asthma' },
+      { day: 'Wednesday', title: 'Malaria' },
+    ])
+    expect(request.points).toEqual([
+      { session: 1, topic: 'Treatment', text: 'Treatment point.' },
+      { session: 2, topic: 'Fluids', text: 'Fluids point.' },
+    ])
+    // No quotes and no session text go to the server.
+    expect(JSON.stringify(request)).not.toContain('quote')
+  })
+
+  it('changes fingerprint when a pack is written again, added or deleted', () => {
+    const a = packAt('2026-11-09T09:00:00.000Z', 'A')
+    const b = packAt('2026-11-10T09:00:00.000Z', 'B')
+    const before = fingerprint([a, b])
+    expect(fingerprint([a, { ...b, savedAt: '2026-11-10T10:00:00.000Z' }])).not.toBe(before)
+    expect(fingerprint([a])).not.toBe(before)
+    expect(fingerprint([a, b])).toBe(before)
+  })
+})
+
+describe('when to write the highlights', () => {
+  const friday = new Date(2026, 10, 13, 18, 30)
+  const weekOf = (count: number): Week => ({
+    key: '2026-11-09',
+    start: new Date(2026, 10, 9),
+    packs: Array.from({ length: count }, (_, i) => packAt(`2026-11-1${i % 5}T0${i % 10}:00:00.000Z`, `Pack ${i}`, [], ['Topic'])),
+  })
+  const savedFor = (week: Week): SavedWeek => ({
+    format: 1,
+    key: week.key,
+    writtenAt: '2026-11-13T18:00:00.000Z',
+    sources: week.packs.slice(0, 20).map(({ id, savedAt, pack }) => ({ id, savedAt, title: pack.title })),
+    points: [],
+    highlights: { highlights: [], left_out: 0, model: 'test-model' },
+  })
+  const plan = (week: Week, changes: Partial<Parameters<typeof planHighlights>[0]> = {}) =>
+    planHighlights({ week, now: friday, hasPoints: true, saved: null, failed: false, tried: undefined, ...changes })
+
+  it('never writes before Friday 18:00', () => {
+    expect(plan(weekOf(2), { now: new Date(2026, 10, 13, 17, 59) })).toBe('locked')
+  })
+
+  it('writes once over, when nothing is saved, and waits until it knows', () => {
+    expect(plan(weekOf(2))).toBe('write')
+    expect(plan(weekOf(2), { saved: undefined })).toBe('loading')
+    expect(plan(weekOf(2), { hasPoints: false })).toBe('empty')
+  })
+
+  it('keeps highlights that match the packs, and writes again when they do not', () => {
+    const week = weekOf(2)
+    expect(plan(week, { saved: savedFor(week) })).toBe('current')
+    const changed = { ...week, packs: [...week.packs, packAt('2026-11-14T09:00:00.000Z', 'Saturday')] }
+    expect(plan(changed, { saved: savedFor(week) })).toBe('write')
+  })
+
+  it('counts a week of more than 20 packs as current once written, so it is not written again and again', () => {
+    const big = weekOf(23)
+    expect(plan(big, { saved: savedFor(big) })).toBe('current')
+  })
+
+  it('writes at most once per opening for the same packs, and not again after a failure', () => {
+    const week = weekOf(2)
+    expect(plan(week, { tried: highlightsBasis(week) })).toBe('tried')
+    expect(plan(week, { failed: true })).toBe('failed')
+  })
+
+  it('sends topics no longer than the server takes', () => {
+    const long = packAt('2026-11-09T09:00:00.000Z', 'Long', [], ['x'.repeat(2000)])
+    expect(highlightsRequest({ key: '2026-11-09', start: new Date(2026, 10, 9), packs: [long] }).points[0].topic).toHaveLength(200)
   })
 })

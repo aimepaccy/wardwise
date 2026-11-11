@@ -1,5 +1,5 @@
 import type { SavedPack } from '@/lib/storage'
-import type { JobCreated, JobState, Limits, Materials, NotePhoto, Reading, Recording } from '@/types'
+import type { HighlightsRequest, JobCreated, JobState, Limits, Materials, NotePhoto, Reading, Recording } from '@/types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 // Long enough for a long recording and five photos on slow Wi-Fi.
@@ -76,6 +76,12 @@ export function askQuestion(record: SavedPack, question: string, history: { ques
   const { notes, transcript } = record.material
   const body = JSON.stringify({ notes, transcript, question, history, topic: record.pack.title.slice(0, MAX_TOPIC_CHARS) })
   return request('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, CHECK_TIMEOUT_MS)
+}
+
+// A week's highlights, from its checked teaching points (see highlightsRequest in lib/weeks.ts).
+export function writeHighlights(week: HighlightsRequest): Promise<{ job_id: string }> {
+  const body = JSON.stringify(week)
+  return request('/api/highlights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, CHECK_TIMEOUT_MS)
 }
 
 // A GET with the term in the address: the server only looks things up, nothing is stored or changed.

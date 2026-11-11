@@ -70,7 +70,7 @@ A short set of the most exam-relevant points from each pack, gathered into a wee
 ### Weekly reminders
 A weekly nudge: "You have 12 flashcards due" or "Review this week's rounds".
 - Email needs an address, so it follows accounts. Web push notifications work without accounts but need extra browser setup and are limited on iPhones.
-- The week highlights (build item 6b) are written when This week is first opened after Friday 18:00, since WardWise keeps nothing on its server and cannot send anything by itself. A push "Your week's highlights are ready" would be the natural first reminder.
+- The week highlights (build item 6b, built 2026-11-11) are written when This week is first opened after Friday 18:00, since WardWise keeps nothing on its server and cannot send anything by itself. A push "Your week's highlights are ready" would be the natural first reminder.
 - Could follow spaced repetition (cards come back just before they would be forgotten), which has good evidence behind it.
 
 ### Simulation debriefs

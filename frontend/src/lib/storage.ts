@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { ChatTurn, Question, StudyPack } from '@/types'
+import type { ChatTurn, Question, StudyPack, WeekHighlights, WeekPoint } from '@/types'
 
 // Study packs live in this browser's IndexedDB, never on WardWise's server. Export is the student's backup copy.
 
@@ -22,26 +22,67 @@ export type SavedPack = {
   chat?: ChatTurn[]
 }
 
+// A week's highlights, kept because writing them costs an AI call and the words would differ each time.
+// Everything else about a week is worked out from the packs when it is shown (lib/weeks.ts).
+export type SavedWeek = {
+  format: 1
+  // The week's Monday, as YYYY-MM-DD in local time.
+  key: string
+  writtenAt: string
+  // The packs it was written from, in the order sent: session n is sources[n - 1]. Compared with the week's
+  // packs now (by id and savedAt) to tell whether the highlights are out of date.
+  sources: { id: string; savedAt: string; title: string }[]
+  // The points as sent, so each highlight can show what it rests on: point n is points[n - 1].
+  points: WeekPoint[]
+  highlights: WeekHighlights
+}
+
 export class StorageError extends Error {}
 
 // Named before the app became WardWise. Renaming it would strand every pack already saved.
 const DB_NAME = 'lucy'
-const DB_VERSION = 1
+// Version 2 (2026-11-11) adds the week highlights. Opening the database at a higher version runs `upgrade`
+// once, in every browser that had the older one, before anything else can read or write.
+const DB_VERSION = 2
 
 interface WardWiseDB extends DBSchema {
   packs: { key: string; value: SavedPack; indexes: { 'by-saved': string } }
+  weeks: { key: string; value: SavedWeek }
 }
 
 let opening: Promise<IDBPDatabase<WardWiseDB>> | null = null
 
 function database() {
-  opening ??= openDB<WardWiseDB>(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion) {
-      if (oldVersion < 1) {
-        const packs = db.createObjectStore('packs', { keyPath: 'id' })
-        packs.createIndex('by-saved', 'savedAt')
-      }
-    },
+  opening ??= new Promise<IDBPDatabase<WardWiseDB>>((resolve, reject) => {
+    let gaveUp = false
+    openDB<WardWiseDB>(DB_NAME, DB_VERSION, {
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          const packs = db.createObjectStore('packs', { keyPath: 'id' })
+          packs.createIndex('by-saved', 'savedAt')
+        }
+        if (oldVersion < 2) db.createObjectStore('weeks', { keyPath: 'key' })
+      },
+      // Another tab, with a newer WardWise, wants to upgrade: let go, so it is not kept waiting. This tab opens
+      // the database again on its next action (and would then need a reload to know the new layout).
+      blocking() {
+        void opening?.then((db) => db.close())
+        opening = null
+      },
+      // A tab still running an older WardWise holds the database open and does not let go. Waiting would leave
+      // every save hanging with no word, so the action fails with a reason instead.
+      blocked() {
+        gaveUp = true
+        reject(new StorageError('WardWise is open in another tab with an older version. Close that tab, then try again.'))
+      },
+    }).then(
+      (db) => {
+        // Opened after all, once the other tab closed; this attempt was already given up, so let it go.
+        if (gaveUp) db.close()
+        else resolve(db)
+      },
+      reject,
+    )
   }).catch((error) => {
     // Forget the failed attempt, so the next action tries again.
     opening = null
@@ -55,6 +96,9 @@ export async function withDatabase<T>(work: (db: IDBPDatabase<WardWiseDB>) => Pr
     return await work(await database())
   } catch (error) {
     if (error instanceof StorageError) throw error
+    if (error instanceof DOMException && error.name === 'VersionError') {
+      throw new StorageError('WardWise was updated in another tab. Reload this page to keep using your packs.')
+    }
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
       throw new StorageError('This browser has no room left for study packs. Export and delete some older packs, then try again.')
     }
@@ -107,12 +151,44 @@ export function listPacks() {
   return withDatabase(async (db) => (await db.getAllFromIndex('packs', 'by-saved')).reverse())
 }
 
+// Highlights written from the pack go with it, so nothing of a deleted pack stays behind. If the deletion is
+// undone, the week's highlights are written again the next time it is opened.
 export function deletePack(id: string) {
-  return withDatabase((db) => db.delete('packs', id))
+  return withDatabase(async (db) => {
+    const tx = db.transaction(['packs', 'weeks'], 'readwrite')
+    await tx.objectStore('packs').delete(id)
+    const weeks = tx.objectStore('weeks')
+    for (const week of await weeks.getAll()) {
+      if (week.sources.some((source) => source.id === id)) await weeks.delete(week.key)
+    }
+    await tx.done
+  })
 }
 
 export function deleteAllPacks() {
-  return withDatabase((db) => db.clear('packs'))
+  return withDatabase(async (db) => {
+    const tx = db.transaction(['packs', 'weeks'], 'readwrite')
+    await Promise.all([tx.objectStore('packs').clear(), tx.objectStore('weeks').clear(), tx.done])
+  })
+}
+
+export function getWeek(key: string) {
+  return withDatabase(async (db) => (await db.get('weeks', key)) ?? null)
+}
+
+// Saves the week's highlights only if every pack they were written from is still saved, unchanged. A write can
+// take a minute; a pack deleted meanwhile must not have its points kept in highlights. The answer says whether
+// they were saved.
+export function saveWeek(record: SavedWeek) {
+  return withDatabase(async (db) => {
+    const tx = db.transaction(['packs', 'weeks'], 'readwrite')
+    const packs = tx.objectStore('packs')
+    const found = await Promise.all(record.sources.map((source) => packs.get(source.id)))
+    const unchanged = found.every((pack, index) => pack !== undefined && pack.savedAt === record.sources[index].savedAt)
+    if (unchanged) await tx.objectStore('weeks').put(record)
+    await tx.done
+    return unchanged
+  })
 }
 
 // Asks the browser not to clear the packs when space runs short. It decides, and some browsers ask the student.

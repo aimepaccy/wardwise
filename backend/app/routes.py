@@ -20,6 +20,7 @@ from app.schemas import (
     AskRequest,
     AudioReceipt,
     Health,
+    HighlightsRequest,
     JobCreated,
     JobState,
     Limits,
@@ -141,6 +142,15 @@ def write_pack(request: PackRequest, background: BackgroundTasks) -> PackJobCrea
 def write_quiz(request: QuizRequest, background: BackgroundTasks) -> PackJobCreated:
     job_id = jobs.create()
     background.add_task(jobs.write_quiz, job_id, request)
+    return PackJobCreated(job_id=job_id)
+
+
+# A week's highlights, written once the week is over. The browser sends the week's checked teaching points (without
+# their quotes or the sessions) and the sessions' days and titles; nothing is kept.
+@router.post('/highlights', status_code=202)
+def write_highlights(request: HighlightsRequest, background: BackgroundTasks) -> PackJobCreated:
+    job_id = jobs.create()
+    background.add_task(jobs.write_highlights, job_id, request)
     return PackJobCreated(job_id=job_id)
 
 

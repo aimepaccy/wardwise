@@ -135,6 +135,21 @@ export type Answer = {
 // One question and its answer, as kept with the pack.
 export type ChatTurn = { id: string; question: string; askedAt: string; answer: Answer }
 
+// Week highlights. Mirrors HighlightsRequest, Highlight and WeekHighlights in backend/app/schemas.py.
+// Sessions are numbered from 1, in the order sent; points too.
+export type WeekPoint = { session: number; topic: string; text: string }
+
+export type HighlightsRequest = { sessions: { day: string; title: string }[]; points: WeekPoint[] }
+
+export type Highlight = { heading: string; text: string; points: number[]; sessions: number[] }
+
+export type WeekHighlights = {
+  highlights: Highlight[]
+  // Points left out because the week had more than one call takes.
+  left_out: number
+  model: string
+}
+
 export type JobState = {
   status: 'queued' | 'working' | 'done' | 'failed'
   step: string
@@ -143,6 +158,7 @@ export type JobState = {
   // A quiz written on its own, for a pack that came without one.
   questions: Question[] | null
   answer: Answer | null
+  highlights: WeekHighlights | null
   error: string | null
 }
 

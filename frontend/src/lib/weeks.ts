@@ -1,5 +1,6 @@
 import type { SavedPack } from '@/lib/storage'
-import type { Question } from '@/types'
+import type { SavedWeek } from '@/lib/storage'
+import type { HighlightsRequest, Question } from '@/types'
 
 // A study week is Monday to Friday, in the student's own time zone. A pack saved on a Saturday or Sunday
 // (a rare weekend round) joins the week that has just ended, so in practice a week runs from Monday 00:00
@@ -106,4 +107,76 @@ export function weekName(week: Week, now: Date) {
 // Monday to Friday. A weekend session is listed with its week all the same.
 export function weekRange(week: Week) {
   return `${rangeFormat.format(week.start)} to ${rangeFormat.format(addDays(week.start, UNLOCK_DAY))}`
+}
+
+// Which writings of which packs a week was made from. Writing a pack again gives it a new savedAt, so a
+// changed, added or deleted pack changes the fingerprint, and highlights from before are out of date.
+export function fingerprint(packs: { id: string; savedAt: string }[]) {
+  return packs.map((record) => `${record.id}@${record.savedAt}`).join(',')
+}
+
+// The server's limits (HighlightsRequest in backend/app/schemas.py).
+const MAX_SESSIONS = 20
+const MAX_POINTS = 300
+const MAX_POINT_CHARS = 1000
+const MAX_TOPIC_CHARS = 200
+// English day names for the writer, whatever language the browser shows.
+const dayForWriter = new Intl.DateTimeFormat('en-GB', { weekday: 'long' })
+
+// What the highlights are written from: each session's day and title, and its teaching points whose quote was
+// found in the session. Not the quotes or the sessions themselves: the points already hold the teaching.
+export function highlightsRequest(week: Week): HighlightsRequest {
+  const packs = week.packs.slice(0, MAX_SESSIONS)
+  const points = packs.flatMap((record, index) =>
+    record.pack.summary
+      .filter((point) => point.grounded && point.text.trim())
+      .map((point) => ({
+        session: index + 1,
+        topic: (point.topic?.trim() ?? '').slice(0, MAX_TOPIC_CHARS),
+        text: point.text.trim().slice(0, MAX_POINT_CHARS),
+      })),
+  )
+  return {
+    sessions: packs.map((record) => ({ day: dayForWriter.format(new Date(record.savedAt)), title: record.pack.title.slice(0, 200) })),
+    points: points.slice(0, MAX_POINTS),
+  }
+}
+
+// The packs a week's highlights are written from (all of them, unless a week has more than the server takes).
+// Saved highlights are compared with this, never with all the week's packs, or a week of more than 20 packs
+// would never match and be written again and again.
+export function highlightsBasis(week: Week) {
+  return fingerprint(week.packs.slice(0, MAX_SESSIONS))
+}
+
+export type HighlightsPlan =
+  | 'locked' // the week is not over
+  | 'empty' // no checked teaching points to write from
+  | 'loading' // not yet known what this browser holds
+  | 'current' // saved highlights match the week's packs
+  | 'failed' // the last try failed in this opening of the sheet
+  | 'tried' // already written once for these packs in this opening: never again, whatever the comparison says
+  | 'write'
+
+// Whether to write the week's highlights now. A pure function, so the rules that spend the AI allowance are
+// tested on their own (lib/weeks.test.ts); the hook only carries out the answer.
+export function planHighlights(input: {
+  week: Week
+  now: Date
+  hasPoints: boolean
+  // undefined: not read yet in this opening; null: none saved.
+  saved: SavedWeek | null | undefined
+  failed: boolean
+  // The basis already written for in this opening of the sheet, if any.
+  tried: string | undefined
+}): HighlightsPlan {
+  const { week, now, hasPoints, saved, failed, tried } = input
+  const basis = highlightsBasis(week)
+  if (!isOver(week, now)) return 'locked'
+  if (saved && fingerprint(saved.sources) === basis) return 'current'
+  if (!hasPoints) return 'empty'
+  if (saved === undefined) return 'loading'
+  if (failed) return 'failed'
+  if (tried === basis) return 'tried'
+  return 'write'
 }

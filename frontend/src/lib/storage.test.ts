@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { importPacks } from '@/lib/import-packs'
-import { StorageError, addQuiz, deleteAllPacks, deletePack, exportBlob, listPacks, newRecord, saveChat, savePack, type SavedPack } from '@/lib/storage'
+import { StorageError, addQuiz, deleteAllPacks, deletePack, exportBlob, getWeek, listPacks, newRecord, saveChat, savePack, saveWeek, type SavedPack, type SavedWeek } from '@/lib/storage'
 import { answerOf } from '@/test/answers'
 import type { ChatTurn, StudyPack } from '@/types'
 
@@ -314,5 +314,53 @@ describe('export and import', () => {
   it('refuses a file over the size limit before reading it', async () => {
     const huge = new File([new Uint8Array(26 * 1024 * 1024)], 'huge.json')
     await expect(importPacks(huge)).rejects.toThrow(/larger than 25 MB/)
+  })
+})
+
+describe('week highlights', () => {
+  const weekFrom = (key: string, records: SavedPack[]): SavedWeek => ({
+    format: 1,
+    key,
+    writtenAt: '2026-11-13T18:05:00.000Z',
+    sources: records.map(({ id, savedAt, pack }) => ({ id, savedAt, title: pack.title })),
+    points: [{ session: 1, topic: '', text: 'Give oxygen to keep saturations 94 to 98 percent.' }],
+    highlights: { highlights: [{ heading: 'Oxygen', text: 'Aim for 94 to 98 percent.', points: [1], sessions: [1] }], left_out: 0, model: 'test-model' },
+  })
+
+  it('are saved and read back by week', async () => {
+    const record = recordAt('2026-11-10T09:00:00.000Z')
+    await savePack(record)
+    expect(await saveWeek(weekFrom('2026-11-09', [record]))).toBe(true)
+    expect((await getWeek('2026-11-09'))?.highlights.highlights[0].heading).toBe('Oxygen')
+    expect(await getWeek('2026-11-02')).toBeNull()
+  })
+
+  it('are not saved if a pack they came from was deleted or written again while they were written', async () => {
+    const kept = recordAt('2026-11-09T09:00:00.000Z', 'Kept')
+    const deleted = recordAt('2026-11-10T09:00:00.000Z', 'Deleted')
+    await savePack(kept)
+    expect(await saveWeek(weekFrom('2026-11-09', [kept, deleted]))).toBe(false)
+    await savePack({ ...kept, savedAt: '2026-11-09T10:00:00.000Z' })
+    expect(await saveWeek(weekFrom('2026-11-09', [kept]))).toBe(false)
+    expect(await getWeek('2026-11-09')).toBeNull()
+  })
+
+  it('go when a pack they were written from is deleted, and only those', async () => {
+    const monday = recordAt('2026-11-09T09:00:00.000Z', 'Monday')
+    const earlier = recordAt('2026-11-02T09:00:00.000Z', 'Earlier')
+    await Promise.all([savePack(monday), savePack(earlier)])
+    await saveWeek(weekFrom('2026-11-09', [monday]))
+    await saveWeek(weekFrom('2026-11-02', [earlier]))
+    await deletePack(monday.id)
+    expect(await getWeek('2026-11-09')).toBeNull()
+    expect(await getWeek('2026-11-02')).not.toBeNull()
+  })
+
+  it('go with everything else when all packs are deleted', async () => {
+    const record = recordAt('2026-11-10T09:00:00.000Z')
+    await savePack(record)
+    await saveWeek(weekFrom('2026-11-09', [record]))
+    await deleteAllPacks()
+    expect(await getWeek('2026-11-09')).toBeNull()
   })
 })

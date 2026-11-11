@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { UNCHECKED, englishVoices, forSpeech, pickVoice, readingScript, type VoiceLike } from '@/lib/speech'
+import { englishVoices, forSpeech, highlightsScript, pickVoice, readingScript, type VoiceLike, UNCHECKED } from '@/lib/speech'
 import type { StudyPack, TeachingPoint } from '@/types'
 
 const point = (text: string, changes: Partial<TeachingPoint> = {}): TeachingPoint => ({ text, quote: 'q', grounded: true, ...changes })
@@ -146,5 +146,36 @@ describe('choosing a voice', () => {
     expect(pickVoice(voices, 'Google UK English', 'en-GB')?.name).toBe('Google UK English')
     expect(pickVoice([voices[0]], null, 'en-GB')?.name).toBe('Google UK English')
     expect(pickVoice([voices[1]], null, 'en-GB')).toBeNull()
+  })
+})
+
+describe('week highlights read aloud', () => {
+  const written = {
+    highlights: [{ heading: 'Oxygen targets', text: 'Aim for 94 to 98%. Give .5 mg if needed.', points: [1], sessions: [1] }],
+    left_out: 3,
+    model: 'test-model',
+  }
+
+  it('says who wrote them, reads each with its heading, and says what was left out', () => {
+    const script = highlightsScript('Last week', written, 2)
+    expect(script.map((item) => item.key)).toEqual(['intro', 'highlight-1', 'left-out', 'end'])
+    expect(script[0].sentences.join(' ')).toContain('Written by AI')
+    expect(script[0].sentences.join(' ')).toContain('2 sessions')
+    expect(script[1].sentences[0]).toBe('Oxygen targets.')
+    // Read safely, as the summary is: a missed leading zero is a tenfold error.
+    expect(script[1].sentences.join(' ')).toContain('0.5 milligrams')
+    expect(script[2].sentences[0]).toMatch(/^3 teaching points were left out/)
+  })
+
+  it('reads ranges and units written with look-alike hyphens and no-break spaces', () => {
+    expect(forSpeech('Peak flow 33\u201150\u202f% of best; 5\u00a0mg and \u22125')).toBe('Peak flow 33 to 50 % of best; 5 milligrams and -5')
+  })
+
+  it('warns first when they are out of date', () => {
+    expect(highlightsScript('Last week', written, 1, true)[0].sentences[1]).toBe("These are from before the week's sessions changed.")
+  })
+
+  it('has nothing about left-out points when none were', () => {
+    expect(highlightsScript('This week', { ...written, left_out: 0 }, 1).map((item) => item.key)).toEqual(['intro', 'highlight-1', 'end'])
   })
 })

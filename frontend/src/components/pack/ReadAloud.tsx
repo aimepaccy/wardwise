@@ -5,19 +5,28 @@ import { RATES, type useSpeech } from '@/hooks/use-speech'
 import type { Spoken } from '@/lib/speech'
 import { cn } from '@/lib/utils'
 
-type ReadAloudProps = { speech: ReturnType<typeof useSpeech>; items: Spoken[] }
+type ReadAloudProps = {
+  speech: ReturnType<typeof useSpeech>
+  items: Spoken[]
+  // What is read, as in "Listen to this summary" and "sends the summary over the internet".
+  subject?: string
+}
 
 // Where the reading is, in words a listener would use.
 function placeOf(items: Spoken[], index: number) {
   const key = items[index]?.key ?? ''
-  const points = items.filter((item) => item.key.startsWith('point-')).length
-  if (key.startsWith('point-')) return `Point ${key.slice('point-'.length)} of ${points}`
+  for (const [prefix, name] of [['point-', 'Point'], ['highlight-', 'Highlight']]) {
+    if (key.startsWith(prefix)) {
+      const total = items.filter((item) => item.key.startsWith(prefix)).length
+      return `${name} ${key.slice(prefix.length)} of ${total}`
+    }
+  }
   if (key.startsWith('overview-')) return 'Overview'
-  if (key === 'coverage' || key === 'end') return 'End'
+  if (key === 'coverage' || key === 'left-out' || key === 'end') return 'End'
   return 'Introduction'
 }
 
-export function ReadAloud({ speech, items }: ReadAloudProps) {
+export function ReadAloud({ speech, items, subject = 'summary' }: ReadAloudProps) {
   const voiceId = useId()
   const box = useRef<HTMLDivElement>(null)
   const listenButton = useRef<HTMLButtonElement>(null)
@@ -42,7 +51,7 @@ export function ReadAloud({ speech, items }: ReadAloudProps) {
   const online = speech.voice !== null && !speech.voice.localService
   const onlineNotice = online && (
     <p className="px-1 text-xs text-muted-foreground">
-      {speech.voice?.name} is an online voice: your browser sends the summary over the internet to be spoken.
+      {speech.voice?.name} is an online voice: your browser sends the {subject} over the internet to be spoken.
       {speech.voices.some((voice) => voice.localService) &&
         ' Your browser lists the voices without "(online)" as voices on this device.'}
     </p>
@@ -58,7 +67,8 @@ export function ReadAloud({ speech, items }: ReadAloudProps) {
         <div className="flex flex-col gap-1.5">
           <Button ref={listenButton} variant="outline" size="sm" className="w-fit" onClick={speech.play}>
             <Headphones aria-hidden="true" />
-            Listen to this summary{online && ' (online voice)'}
+            Listen to {subject === 'summary' ? 'this summary' : `the ${subject}`}
+            {online && ' (online voice)'}
           </Button>
           {onlineNotice}
         </div>

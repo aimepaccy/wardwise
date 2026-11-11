@@ -1,5 +1,5 @@
 import { groupByTopic } from '@/lib/topics'
-import type { StudyPack } from '@/types'
+import type { StudyPack, WeekHighlights } from '@/types'
 
 // One thing read aloud, in sentences. The key matches what is on screen, so it can be highlighted.
 export type Spoken = { key: string; sentences: string[] }
@@ -52,6 +52,38 @@ export function readingScript(pack: Script, imported = false): Spoken[] {
     })
   }
   items.push({ key: 'end', sentences: ['End of summary.'] })
+  return items
+}
+
+// The screen's label for week highlights, heard the same way. WardWise checks which points a highlight cites,
+// not what it says about them, as for the overview.
+export const HIGHLIGHTS_LABEL = (sessions: number) =>
+  `Written by AI from the teaching points WardWise found in your ${sessions === 1 ? 'session' : `${sessions} sessions`}. ` +
+  'WardWise checks which points each highlight rests on, not its wording: compare it with those points and trusted sources.'
+
+// A week's highlights as they are read: who wrote them and from what, whether they are out of date, each
+// highlight with its heading, and what was left out of a very busy week, as the screen says.
+export function highlightsScript(name: string, written: WeekHighlights, sessions: number, outdated = false): Spoken[] {
+  const items: Spoken[] = [
+    {
+      key: 'intro',
+      sentences: [
+        `${name}: your highlights.`,
+        ...(outdated ? ["These are from before the week's sessions changed."] : []),
+        HIGHLIGHTS_LABEL(sessions),
+      ],
+    },
+  ]
+  written.highlights.forEach((highlight, index) => {
+    items.push({ key: `highlight-${index + 1}`, sentences: [`${forSpeech(highlight.heading)}.`, ...sentencesOf(highlight.text)] })
+  })
+  if (written.left_out > 0) {
+    items.push({
+      key: 'left-out',
+      sentences: [`${written.left_out} teaching ${written.left_out === 1 ? 'point was' : 'points were'} left out: the week had more than WardWise writes from at once.`],
+    })
+  }
+  items.push({ key: 'end', sentences: ['End of highlights.'] })
   return items
 }
 
@@ -168,6 +200,10 @@ const SHORTHAND_WORDS = new RegExp(
 // and "1-2 g" can be heard as "one minus two".
 export function forSpeech(text: string) {
   return text
+    // Look-alikes first, so the rules below see them: models often write non-breaking hyphens ("33\u201150"),
+    // minus signs and no-break spaces ("0.9\u202f%"), which would otherwise escape the range and unit rules.
+    .replace(/[\u2010-\u2012\u2212]/g, '-')
+    .replace(/[\u00a0\u202f]/g, ' ')
     .replace(new RegExp(String.raw`${NOT_IN_A_WORD}\.(\d)`, 'gu'), '0.$1')
     .replace(new RegExp(`[${Object.keys(SIGNS).join('')}]`, 'gu'), (sign) => ` ${SIGNS[sign]} `)
     .replace(/\b1:(\d{3,})\b/g, '1 in $1')

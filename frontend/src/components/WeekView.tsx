@@ -1,12 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Dialog } from 'radix-ui'
+import { HighlightsSection } from '@/components/HighlightsSection'
 import { Quiz } from '@/components/pack/Quiz'
 import { Button } from '@/components/ui/button'
+import { useWeekHighlights } from '@/hooks/use-week-highlights'
 import { plural } from '@/lib/format'
 import { revealPack } from '@/lib/reveal'
 import { StorageError, listPacks, type SavedPack } from '@/lib/storage'
-import { groupByWeek, topicsOf, weekKey, weekName, weekQuiz, weekRange } from '@/lib/weeks'
+import { groupByWeek, topicsOf, unlocksAt, weekKey, weekName, weekQuiz, weekRange } from '@/lib/weeks'
 
 type WeekViewProps = {
   // Goes up by one each time App saves a pack, so an open week shows it.
@@ -18,8 +20,9 @@ const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long' })
 const endClass = 'aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent'
 const timeFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long', hour: 'numeric', minute: '2-digit' })
 
-// The student's week: the sessions saved Monday to Friday and a quiz mixed from them. Worked out from
-// the packs in this browser each time it opens; nothing is stored or sent.
+// The student's week: highlights once it is over, the sessions saved Monday to Friday, and a quiz mixed from
+// them. The sessions and quiz are worked out from the packs in this browser each time it opens; only the
+// highlights are written by the server's AI and kept (see use-week-highlights).
 export function WeekView({ version, onOpenPack }: WeekViewProps) {
   const [open, setOpen] = useState(false)
   const [packs, setPacks] = useState<SavedPack[] | null>(null)
@@ -63,11 +66,15 @@ export function WeekView({ version, onOpenPack }: WeekViewProps) {
   const earlier = weeks.at(position + 1)
   const later = position > 0 ? weeks[position - 1] : undefined
   const quiz = useMemo(() => weekQuiz(week), [week])
+  // Only once the packs are read, so a week is never judged on an empty list.
+  const highlights = useWeekHighlights(week, now, open && packs !== null, version)
 
   function changeOpen(next: boolean) {
     setOpen(next)
     if (next) {
       setNow(new Date())
+      // Read afresh: deciding on the last opening's list could write highlights from a pack since deleted.
+      setPacks(null)
       setShownKey(null)
       setError(null)
     }
@@ -150,6 +157,8 @@ export function WeekView({ version, onOpenPack }: WeekViewProps) {
               </p>
             ) : (
               <>
+                <HighlightsSection state={highlights.state} name={name} unlocksAt={unlocksAt(week)} onRetry={highlights.retry} />
+
                 <section aria-labelledby={`${id}-sessions`} className="flex flex-col gap-2">
                   <h3 id={`${id}-sessions`} className="text-sm font-semibold">
                     {plural(week.packs.length, 'session')}
@@ -209,7 +218,8 @@ export function WeekView({ version, onOpenPack }: WeekViewProps) {
           </div>
 
           <footer className="border-t p-5 text-xs text-muted-foreground">
-            Worked out from the packs saved in this browser. Nothing here is sent to WardWise's server.
+            Worked out from the packs saved in this browser. Only the highlights are written on WardWise's server, from
+            the week's teaching points; it keeps nothing.
           </footer>
         </Dialog.Content>
       </Dialog.Portal>

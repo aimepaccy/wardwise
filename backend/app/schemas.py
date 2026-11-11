@@ -273,6 +273,55 @@ class Answer(BaseModel):
     model: str
 
 
+# Week highlights: a short review in prose of a week's sessions, written from their teaching points. The browser
+# sends only points whose quote was found when each pack was written, without the quotes (code does not need
+# them here, and they would take room). The sessions are numbered by their place in the list.
+MAX_WEEK_SESSIONS = 20
+
+
+class WeekSession(BaseModel):
+    # The day it was saved, such as "Tuesday", so the writer can say when something was taught.
+    day: str = Field(max_length=20)
+    title: str = Field(max_length=200)
+
+
+class WeekPoint(BaseModel):
+    session: int = Field(ge=1, le=MAX_WEEK_SESSIONS)
+    topic: str = Field('', max_length=200)
+    text: str = Field(max_length=1000)
+
+
+class HighlightsRequest(BaseModel):
+    sessions: list[WeekSession] = Field(min_length=1, max_length=MAX_WEEK_SESSIONS)
+    points: list[WeekPoint] = Field(min_length=1, max_length=300)
+
+
+class HighlightDraft(Strict):
+    heading: str = Field(description='Two to six words naming the theme.')
+    text: str = Field(description='Two to four sentences of plain prose.')
+    points: list[int] = Field(description='The numbers of the points this highlight rests on.')
+
+
+class HighlightsDraft(Strict):
+    highlights: list[HighlightDraft]
+
+
+class Highlight(BaseModel):
+    heading: str
+    text: str
+    # The points it cites, numbered as the browser sent them (from 1), and the sessions they come from, worked
+    # out by code from the points, never taken from the AI.
+    points: list[int]
+    sessions: list[int]
+
+
+class WeekHighlights(BaseModel):
+    highlights: list[Highlight]
+    # Points left out because the week had more than one call can take.
+    left_out: int
+    model: str
+
+
 class JobState(BaseModel):
     status: JobStatus
     step: str
@@ -281,6 +330,7 @@ class JobState(BaseModel):
     # A quiz written on its own, for a pack that came without one.
     questions: list[CheckedQuestion] | None = None
     answer: Answer | None = None
+    highlights: WeekHighlights | None = None
     error: str | None = None
 
 

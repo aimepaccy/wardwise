@@ -251,6 +251,7 @@ def test_transcription_failure_is_explained(monkeypatch):
         'pack': None,
         'questions': None,
         'answer': None,
+        'highlights': None,
         'error': 'The transcription service is busy. Please try again in a minute.',
     }
 
