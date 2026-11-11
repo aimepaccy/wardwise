@@ -22,6 +22,8 @@ export type SaveStatus =
   | { status: 'failed'; message: string }
   // The pack is saved, but the quiz written for it later is not.
   | { status: 'quiz-failed'; message: string }
+  // The pack is saved, but its latest questions and answers are not.
+  | { status: 'chat-failed'; message: string }
 
 type PackViewProps = {
   record: SavedPack
@@ -87,11 +89,16 @@ export function PackView({ record, save, onQuizWritten }: PackViewProps) {
           </Tooltip>
         }
       >
-        {(save.status === 'failed' || save.status === 'quiz-failed') && (
+        {(save.status === 'failed' || save.status === 'quiz-failed' || save.status === 'chat-failed') && (
           <p role="alert" className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
             <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
             <span>
-              {save.status === 'failed' ? 'This pack is not saved.' : 'The pack is saved, but its new quiz is not.'} {save.message}{' '}
+              {save.status === 'failed'
+                ? 'This pack is not saved.'
+                : save.status === 'quiz-failed'
+                  ? 'The pack is saved, but its new quiz is not.'
+                  : 'The pack is saved, but its latest chat questions and answers are not.'}{' '}
+              {save.message}{' '}
               Export it now to keep a copy.
             </span>
           </p>

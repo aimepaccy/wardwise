@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { StorageError, withDatabase, type SavedPack } from '@/lib/storage'
-import type { StudyPack } from '@/types'
+import { keptTurns, sourceLink } from '@/lib/chat'
+import type { Answer, StudyPack } from '@/types'
 
 // Kept out of storage.ts so the browser downloads Zod only when the student presses Import.
 
@@ -45,6 +46,51 @@ const studyPack = z
   // Fails to compile if this check and the StudyPack type ever disagree.
   .transform((pack): StudyPack => pack)
 
+const answer = z
+  .object({
+    question: short,
+    parts: z
+      .array(
+        z.object({
+          text: long,
+          sources: z.array(z.number().int().min(1).max(100)).max(20),
+          quote: long,
+          grounded,
+          group_unclear: z.boolean(),
+        }),
+      )
+      .max(20),
+    sources: z
+      .array(
+        z.object({
+          number: z.number().int().min(1).max(100),
+          kind: z.enum(['session', 'pubmed', 'statpearls']),
+          title: short,
+          // Any other link is dropped, not refused: the source still shows, without a link.
+          url: z.string().max(200).nullable().transform(sourceLink),
+          detail: short,
+          passages: z.array(long).max(20),
+        }),
+      )
+      .max(50)
+      // Each source has its own number, or a citation could point to two.
+      .refine((sources) => new Set(sources.map((source) => source.number)).size === sources.length),
+    disagree: z.boolean(),
+    group: short,
+    declined: z.boolean(),
+    searched: z.array(short).max(10),
+    notes: z.array(short).max(10),
+    model: short,
+  })
+  .transform((value): Answer => value)
+
+const chatTurn = z.object({
+  id: z.string().regex(/^[\w-]{1,64}$/),
+  question: text(500),
+  askedAt: z.iso.datetime(),
+  answer,
+})
+
 const savedPack = z.object({
   format: z.literal(1),
   id: z.string().regex(/^[\w-]{1,64}$/),
@@ -55,6 +101,7 @@ const savedPack = z.object({
     notes: text(100_000),
     transcript: text(1_000_000).nullable(),
   }),
+  chat: z.array(chatTurn).max(500).optional(),
 })
 
 // The outside is checked first; each pack is then checked on its own, so one damaged pack does not
@@ -128,7 +175,28 @@ function recheck(record: SavedPack): SavedPack {
     ...record,
     origin: 'imported',
     pack: { ...pack, summary: pack.summary.map(check), flashcards: pack.flashcards.map(check), questions: pack.questions.map(check) },
+    ...(record.chat && { chat: keptTurns(record.chat).map((turn) => ({ ...turn, answer: recheckAnswer(turn.answer, source) })) }),
   }
+}
+
+// As on the server, a quote counts if it is in a cited passage. For the session, that means the material in the
+// file, not the passages stored beside the answer; for the literature, the stored passages are all a file can offer.
+// Citations to sources the answer does not list are dropped, and so is a part left with none.
+function recheckAnswer(answer: Answer, material: string[]): Answer {
+  const byNumber = new Map(answer.sources.map((source) => [source.number, source]))
+  const parts = answer.parts.flatMap((part) => {
+    const cited = [...new Set(part.sources)].filter((number) => byNumber.has(number))
+    if (cited.length === 0) return []
+    const sources = cited.map((number) => byNumber.get(number)!)
+    const literature = sources.filter((source) => source.kind !== 'session').flatMap((source) => source.passages)
+    const found =
+      isGrounded(part.quote, words(literature.join('\n'))) ||
+      (sources.some((source) => source.kind === 'session') && isGrounded(part.quote, material))
+    return [{ ...part, sources: cited, grounded: part.grounded && found }]
+  })
+  // The session has no link, whatever the file says.
+  const sources = answer.sources.map((source) => (source.kind === 'session' ? { ...source, url: null } : source))
+  return { ...answer, parts, sources }
 }
 
 export type ImportResult = { added: number; alreadyHere: number; unreadable: number }

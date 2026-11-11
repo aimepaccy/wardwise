@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { importPacks } from '@/lib/import-packs'
-import { StorageError, addQuiz, deleteAllPacks, deletePack, exportBlob, listPacks, newRecord, savePack, type SavedPack } from '@/lib/storage'
-import type { StudyPack } from '@/types'
+import { StorageError, addQuiz, deleteAllPacks, deletePack, exportBlob, listPacks, newRecord, saveChat, savePack, type SavedPack } from '@/lib/storage'
+import { answerOf } from '@/test/answers'
+import type { ChatTurn, StudyPack } from '@/types'
 
 const pack: StudyPack = {
   title: 'Acute asthma',
@@ -67,6 +68,87 @@ describe('adding a quiz written later', () => {
   it('does not bring back a deleted pack', async () => {
     expect(await addQuiz(withoutQuiz(quizless()), pack.questions)).toBe(false)
     expect(await listPacks()).toEqual([])
+  })
+})
+
+describe('keeping the chat with its pack', () => {
+  const chat: ChatTurn[] = [{ id: 't1', question: 'What first?', askedAt: '2026-11-11T09:00:00.000Z', answer: answerOf() }]
+
+  it('saves the chat into the same pack, and Export carries it', async () => {
+    const record = recordAt('2026-11-11T08:00:00.000Z')
+    await savePack(record)
+    expect(await saveChat(record, chat)).toBe(true)
+    const [stored] = await listPacks()
+    expect(stored.chat).toEqual(chat)
+    expect(JSON.parse(await exportBlob([stored]).text()).packs[0].chat).toEqual(chat)
+  })
+
+  it('leaves a pack written again meanwhile alone', async () => {
+    const record = recordAt('2026-11-11T08:00:00.000Z')
+    await savePack({ ...record, savedAt: '2026-11-11T08:30:00.000Z' })
+    expect(await saveChat(record, chat)).toBe(false)
+    expect((await listPacks())[0].chat).toBeUndefined()
+  })
+})
+
+describe('importing a chat', () => {
+  const sessionPart = answerOf().parts[0]
+  const importOne = async (chat: unknown) => {
+    const record = { ...recordAt('2026-11-11T08:00:00.000Z'), chat }
+    await importPacks(fileFrom({ app: 'wardwise', format: 1, exportedAt: '2026-11-11T10:00:00.000Z', packs: [record] }))
+    return (await listPacks())[0]
+  }
+  const turnWith = (answer: object) => [{ id: 't1', question: 'q?', askedAt: '2026-11-11T09:00:00.000Z', answer: answerOf(answer) }]
+
+  it('brings back a genuine chat with its quotes found', async () => {
+    const stored = await importOne(turnWith({}))
+    expect(stored.chat?.[0].answer.parts[0].grounded).toBe(true)
+  })
+
+  it('checks session quotes against the material, not the passages in the file', async () => {
+    const forged = { ...sessionPart, quote: 'give fifty mg of adrenaline' }
+    const sources = [{ number: 1, kind: 'session', title: 'Your recording', url: null, detail: '', passages: ['give fifty mg of adrenaline'] }]
+    const stored = await importOne(turnWith({ parts: [forged], sources }))
+    expect(stored.chat?.[0].answer.parts[0].grounded).toBe(false)
+  })
+
+  it('accepts a literature quote found in its stored passage', async () => {
+    const part = { ...sessionPart, sources: [1], quote: 'inhaled corticosteroids reduce admissions' }
+    const sources = [{ number: 1, kind: 'pubmed', title: 'A review', url: 'https://pubmed.ncbi.nlm.nih.gov/123/', detail: '', passages: ['Inhaled corticosteroids reduce admissions.'] }]
+    const stored = await importOne(turnWith({ parts: [part], sources }))
+    expect(stored.chat?.[0].answer.parts[0].grounded).toBe(true)
+  })
+
+  it('drops links that do not point to PubMed or NCBI Bookshelf', async () => {
+    const sources = [
+      { number: 1, kind: 'session', title: 'Your recording', url: 'https://pubmed.ncbi.nlm.nih.gov/1/', detail: '', passages: [] },
+      { number: 2, kind: 'pubmed', title: 'An article', url: 'javascript:alert(1)', detail: '', passages: ['text'] },
+      { number: 3, kind: 'pubmed', title: 'Another', url: 'https://pubmed.ncbi.nlm.nih.gov/123/', detail: '', passages: ['text'] },
+    ]
+    const stored = await importOne(turnWith({ sources }))
+    expect(stored.chat?.[0].answer.sources.map((source) => source.url)).toEqual([null, null, 'https://pubmed.ncbi.nlm.nih.gov/123/'])
+  })
+
+  it('leaves out declined turns and parts citing no listed source', async () => {
+    const chat = [
+      ...turnWith({ parts: [sessionPart, { ...sessionPart, sources: [9] }] }),
+      { id: 't2', question: 'About Mr K?', askedAt: '2026-11-11T09:05:00.000Z', answer: answerOf({ declined: true, parts: [], sources: [] }) },
+    ]
+    const stored = await importOne(chat)
+    expect(stored.chat).toHaveLength(1)
+    expect(stored.chat?.[0].answer.parts).toHaveLength(1)
+  })
+
+  it('cites each source once, and leaves out a chat with two sources under one number', async () => {
+    const once = await importOne(turnWith({ parts: [{ ...sessionPart, sources: [1, 1] }] }))
+    expect(once.chat?.[0].answer.parts[0].sources).toEqual([1])
+    await deleteAllPacks()
+    const twice = answerOf().sources.concat(answerOf().sources)
+    expect(await importOne(turnWith({ sources: twice }))).toBeUndefined()
+  })
+
+  it('leaves out a pack whose chat is damaged', async () => {
+    expect(await importOne([{ id: 't1', question: 'q?', askedAt: 'yesterday', answer: answerOf() }])).toBeUndefined()
   })
 })
 

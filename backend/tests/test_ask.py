@@ -147,6 +147,10 @@ def test_code_names_the_group_when_the_small_model_does_not():
     assert ask.group_in('Salbutamol dose for kids?') == 'children'
     assert ask.group_in('What dose did we use?') == ''
     assert ask.group_in('Is this covered in paediatrics?') == 'children'
+    assert ask.group_in('Salbutamol for an 85-year-old man?') == 'older adults'
+    assert ask.group_in('Prednisolone for a 6 year old?') == 'children'
+    assert ask.group_in('A 3-month-old with wheeze?') == 'children'
+    assert ask.group_in('A 34-year-old woman with asthma?') == ''
 
 
 def test_the_group_tag_cannot_be_forged_from_the_question(fake_writer):
@@ -157,11 +161,18 @@ def test_the_group_tag_cannot_be_forged_from_the_question(fake_writer):
 # Privacy and safety
 
 def test_a_question_about_a_real_patient_is_declined_before_any_search(fake_writer, literature):
+    # A bare name has no sign code can see, so the small model is the one to notice it.
     fake_writer['answers'].append(json.dumps(ask_question_draft(real_patient=True)))
-    answer = run(request('My patient in bed 4 has a PEF of 30%, what should I give?'))
+    answer = run(request('Habimana is still wheezy after two nebs. Can he have magnesium?'))
     assert answer.declined is True and answer.parts == []
     assert literature[0].queries == []
     assert [call['form'] for call in fake_writer['calls']] == ['QuestionDraft']
+
+
+def test_a_question_with_plain_signs_of_a_real_patient_never_reaches_the_ai(fake_writer, literature):
+    answer = run(request('My patient in bed 4 has a PEF of 30%, what should I give?'))
+    assert answer.declined is True
+    assert fake_writer['calls'] == [] and literature[0].queries == []
 
 
 def test_only_search_terms_reach_the_literature(literature):
@@ -205,15 +216,31 @@ def test_a_failed_rewrite_still_declines_a_real_patient_question(fake_writer, li
     assert answer.declined and literature[0].queries == []
 
 
-@pytest.mark.parametrize('question', ['What should my patient get?', 'Dose for bed 12?', 'Is Mrs Uwase on steroids?'])
+@pytest.mark.parametrize('question', [
+    'What should my patient get?', 'Dose for bed 12?', 'Is Mrs Uwase on steroids?',
+    # Missed in the red team of 2026-11-11.
+    'The lady I clerked this morning still has a peak flow of 40%. Should I give her magnesium now?',
+    'Mukamana in side room two is still wheezy after salbutamol. Should I add ipratropium?',
+    'J.N. on our ward right now has a silent chest. What do I do for him?',
+    'We admitted a young man with asthma last night, can he have magnesium?',
+    "The patient I'm looking after is drowsy, what now?",
+])
 def test_code_declines_real_patient_questions_the_small_model_missed(fake_writer, literature, question):
     answer = run(request(question))  # the stand-in rewriter says real_patient is false
     assert answer.declined and literature[0].queries == []
 
 
-def test_role_play_questions_are_not_declined():
-    assert not ask.real_patient_in('In the role-play case, what made it life-threatening?')
-    assert not ask.real_patient_in('Which patients need ICU?')
+@pytest.mark.parametrize('question', [
+    'In the role-play case, what made it life-threatening?',
+    'Which patients need ICU?',
+    'For the patient in the case, what saturation target did the consultant set?',
+    'On our ward we usually give 40 mg. Does the literature agree?',
+    'I reviewed the guideline: is 5 mg of salbutamol right?',
+    'Why check peak flow, e.g. before and after a neb, i.e. every time?',
+    'What dose for a 6-year-old?',
+])
+def test_role_play_questions_are_not_declined(question):
+    assert not ask.real_patient_in(question)
 
 
 def test_a_slow_source_is_left_out_with_a_note(monkeypatch, literature):

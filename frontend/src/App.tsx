@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { MotionConfig, motion } from 'motion/react'
+import { AskDock } from '@/components/ask/AskDock'
 import { Background } from '@/components/Background'
 import { GenerateBar } from '@/components/GenerateBar'
 import { Header } from '@/components/Header'
@@ -17,11 +18,11 @@ import { UploadsBar } from '@/components/UploadsBar'
 import { useLeaveWarning } from '@/hooks/use-leave-warning'
 import { useLimits } from '@/hooks/use-limits'
 import { useTheme } from '@/hooks/use-theme'
-import { ApiError, sendSession, waitForJob, writePack } from '@/lib/api'
+import { ApiError, messageOf, sendSession, waitForJob, writePack } from '@/lib/api'
 import { canWriteStraightAway, hasCorrections, needsCheck } from '@/lib/materials'
 import { stagger } from '@/lib/motion'
-import { StorageError, addQuiz, askToKeepPacks, newRecord, savePack, type SavedPack } from '@/lib/storage'
-import type { Materials, NotePhoto, Question, Recording, SendState, WriteState } from '@/types'
+import { StorageError, addQuiz, askToKeepPacks, newRecord, saveChat, savePack, type SavedPack } from '@/lib/storage'
+import type { ChatTurn, Materials, NotePhoto, Question, Recording, SendState, WriteState } from '@/types'
 
 export default function App() {
   const { theme, chooseTheme } = useTheme()
@@ -137,12 +138,11 @@ export default function App() {
       save = { status: 'failed', message: error instanceof StorageError ? error.message : '' }
     }
     // Only if the student has not opened another pack meanwhile.
-    setShown((current) => (current?.record.id === record.id ? { record, save } : current))
+    setShown((current) => (current?.record.id === record.id ? { ...current, save } : current))
   }
 
   // A quiz written later for a pack that came without one. Saved first, then shown if the same pack is still open.
   async function handleQuizWritten(record: SavedPack, questions: Question[]) {
-    const updated: SavedPack = { ...record, pack: { ...record.pack, questions } }
     let save: SaveStatus | null
     try {
       // False if the pack was written again or deleted meanwhile, or was never saved (then it is shown, not saved).
@@ -151,11 +151,29 @@ export default function App() {
     } catch (error) {
       save = { status: 'quiz-failed', message: error instanceof StorageError ? error.message : '' }
     }
+    // Merged into the pack on screen, not the one the quiz started from, so questions asked meanwhile stay.
     setShown((current) =>
-      current?.record.id === record.id && current.record.savedAt === record.savedAt
-        ? { record: updated, save: save ?? current.save }
+      sameWriting(current?.record, record)
+        ? { record: { ...current!.record, pack: { ...current!.record.pack, questions } }, save: save ?? current!.save }
         : current,
     )
+  }
+
+  // The chat is kept with its pack: in the pack on screen (so Export includes it), and in the saved copy.
+  async function handleChatKept(record: SavedPack, chat: ChatTurn[]) {
+    setShown((current) => (sameWriting(current?.record, record) ? { ...current!, record: { ...current!.record, chat } } : current))
+    try {
+      // False if the pack was never saved or was written again meanwhile; the chat then stays on screen only.
+      if (!(await saveChat(record, chat))) return
+      setLibraryVersion((version) => version + 1)
+      // A save that works again clears the warning from one that failed.
+      setShown((current) =>
+        sameWriting(current?.record, record) && current!.save.status === 'chat-failed' ? { ...current!, save: { status: 'saved' } } : current,
+      )
+    } catch (error) {
+      const save: SaveStatus = { status: 'chat-failed', message: error instanceof StorageError ? error.message : '' }
+      setShown((current) => (sameWriting(current?.record, record) ? { ...current!, save } : current))
+    }
   }
 
   // Clears the inputs for the next round. The pack on screen stays until a new one replaces it.
@@ -257,13 +275,19 @@ export default function App() {
             />
           </div>
 
-          {/* A new key starts each pack with fresh cards, quiz and reading, including a pack written again. */}
-          {shown && <PackView
-              key={`${shown.record.id}:${shown.record.savedAt}`}
-              record={shown.record}
-              save={shown.save}
-              onQuizWritten={handleQuizWritten}
-            />}
+          {/* A new key starts each pack with fresh cards, quiz, reading and chat, including a pack written again.
+              The chat docks on the right from tablet width; on phones it opens from an Ask button. */}
+          {shown && (
+            <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_20rem] lg:grid-cols-[minmax(0,1fr)_23rem]">
+              <PackView
+                key={`${shown.record.id}:${shown.record.savedAt}`}
+                record={shown.record}
+                save={shown.save}
+                onQuizWritten={handleQuizWritten}
+              />
+              <AskDock key={`ask:${shown.record.id}:${shown.record.savedAt}`} record={shown.record} onKept={handleChatKept} />
+            </div>
+          )}
 
           {showPanel && sendState.status === 'ready' && draft && (
             <MaterialsPanel
@@ -310,6 +334,7 @@ export default function App() {
   )
 }
 
-function messageOf(error: unknown) {
-  return error instanceof ApiError ? error.message : 'Something went wrong. Please try again.'
+// The same writing of the same pack: writing a pack again gives it a new savedAt.
+function sameWriting(a: SavedPack | undefined, b: SavedPack) {
+  return a !== undefined && a.id === b.id && a.savedAt === b.savedAt
 }

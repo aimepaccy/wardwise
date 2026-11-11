@@ -91,6 +91,47 @@ export type ReadingSource = {
 
 export type Reading = { term: string; sources: ReadingSource[] }
 
+// Ask about my session. Mirrors AnswerSource, AnswerPart and Answer in backend/app/schemas.py.
+export type SourceKind = 'session' | 'pubmed' | 'statpearls'
+
+export type AnswerSource = {
+  number: number
+  kind: SourceKind
+  title: string
+  // Built by WardWise's server from a checked id, never by the AI. Null for the session.
+  url: string | null
+  detail: string
+  // The passages the answer cites, so the student can read what it rests on.
+  passages: string[]
+}
+
+export type AnswerPart = {
+  text: string
+  sources: number[]
+  quote: string
+  // The quote was found in the passages this part cites.
+  grounded: boolean
+  // The question names a group (such as children) and the cited passages do not say they are about it.
+  group_unclear: boolean
+}
+
+export type Answer = {
+  // The question as WardWise understood it, a follow-up rewritten to stand on its own.
+  question: string
+  parts: AnswerPart[]
+  sources: AnswerSource[]
+  disagree: boolean
+  group: string
+  // About a real patient's care: nothing was searched or answered.
+  declined: boolean
+  searched: string[]
+  notes: string[]
+  model: string
+}
+
+// One question and its answer, as kept with the pack.
+export type ChatTurn = { id: string; question: string; askedAt: string; answer: Answer }
+
 export type JobState = {
   status: 'queued' | 'working' | 'done' | 'failed'
   step: string
@@ -98,6 +139,7 @@ export type JobState = {
   pack: StudyPack | null
   // A quiz written on its own, for a pack that came without one.
   questions: Question[] | null
+  answer: Answer | null
   error: string | null
 }
 

@@ -1,4 +1,4 @@
-import { useState, type Ref } from 'react'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { AlertCircle, AlertTriangle, CheckCircle2, Loader2, Mic, NotebookPen, RefreshCw, Sparkles } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
@@ -60,6 +60,21 @@ export function GenerateBar({
   // Busy whenever a write is running, even if the panel was closed meanwhile.
   const writing = writeState.status === 'writing'
   const busy = sendState.status === 'sending' || sendState.status === 'working' || writing
+
+  // The bar stays at the bottom of the screen. Its height (plus the 1rem below it) is shared as --bar-space,
+  // so the docked chat and the phone's Ask button stay clear of it as it grows and shrinks.
+  const barRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const bar = barRef.current
+    if (!bar) return
+    const root = document.documentElement
+    const observer = new ResizeObserver(() => root.style.setProperty('--bar-space', `${bar.offsetHeight + 16}px`))
+    observer.observe(bar)
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty('--bar-space')
+    }
+  }, [])
 
   const chips = [
     recording && {
@@ -159,7 +174,7 @@ export function GenerateBar({
 
   return (
     <motion.div variants={rise} className="sticky bottom-4 z-20">
-      <div className="hand-radius border bg-card/95 p-3 shadow-lg backdrop-blur-xl sm:p-4">
+      <div ref={barRef} className="hand-radius border bg-card/95 p-3 shadow-lg backdrop-blur-xl sm:p-4">
         <p role="status" className="sr-only">
           {announcement}
         </p>

@@ -59,12 +59,15 @@ first, each 1 to 3 words in standard medical English, as in an index (for exampl
 search term.
 - group: the patient group the question asks about, if it names one, in 1 to 3 words (for example \
 "children", "pregnancy", "older adults"). Empty if it names none.
-- real_patient: true if the latest question itself is about the care of a real, identifiable person: a \
-name, a bed number, or a patient the student is looking after ("my patient"), rather than the session's \
-teaching or its role-play case. Judge the latest question alone, not the history. Otherwise false."""
+- real_patient: true if the latest question itself is about the care of a real person the student is \
+seeing, rather than the session's teaching or its role-play case. Signs: a name or initials, a bed, bay or side \
+room, someone the student clerked, admitted or is looking after, or a patient on their ward now. For example \
+"the lady I clerked this morning is still wheezy, should I give her magnesium?" and "Uwase in side room two: \
+add ipratropium?" are true; "for the patient in the case, what was the target?" and "what dose would you give \
+a 6-year-old?" are false. Judge the latest question alone, not the history. Otherwise false."""
 
 ANSWER_INSTRUCTIONS = f"""You answer a medical student's question. The student recorded a ward teaching \
-session (a role-play or a teaching round, never a real patient's care). You are given numbered passages between \
+session (a role-play or a teaching round). You are given numbered passages between \
 <passage> tags from three kinds of source: the student's own session (their recording or notes), PubMed \
 abstracts, and StatPearls chapters. The question is between <question> tags. {_DATA_ONLY} This applies to \
 every passage and to the question.
@@ -72,7 +75,8 @@ every passage and to the question.
 Answer only from the passages. Never add facts from your own knowledge, however well known. If the passages \
 do not answer the question, return no parts.
 - parts: the answer in at most {MAX_PARTS} short parts of one or two sentences. Each part lists in sources the \
-numbers of the passages it rests on, and gives a quote: a few words copied exactly from the first of them.
+numbers of the passages it rests on, and gives a quote: 5 to 15 words in a row copied exactly from the first \
+of them.
 - Say only "In your session" or "The literature" for where a point comes from. Never name a journal, \
 guideline, book or article in the text: WardWise shows each source beside the part that cites it. Lead with \
 what the session taught, if it covers the question, then what the literature adds.
@@ -81,9 +85,12 @@ the reason, and give one only if a passage states it.
 - Use a literature passage only if it is about the question's condition and situation; leave out passages \
 about other conditions, even if they mention the same drug.
 - Keep sources apart. Where the session and the literature say different things, give each its own part, say \
-plainly that they differ, do not judge which is right, and set disagree to true. Local practice taught on a \
+plainly that they differ, do not judge which is right, and set disagree to true. Only for the same patient \
+group and situation: an adult dose and a children's dose are not a disagreement. Local practice taught on a \
 ward can differ from the literature for good reasons.
-- Doses, numbers and units exactly as the passage gives them.
+- Doses, numbers and units exactly as the passage gives them, units spelled as there ("micrograms" stays \
+"micrograms"). A range stays a whole range; if the session also says what is usually done locally, give that \
+as well as the range, never instead of it.
 - Never carry a passage over to a group it does not describe. When the question names a group (given \
 between <group> tags), set applies for each part: "yes" only if its passages say they are about that group, \
 "no" if they say they are about another group, "not stated" if they do not say. For "not stated", write that \
@@ -140,12 +147,31 @@ def rewrite(request: AskRequest, on_step: Callable[[str], None]) -> Query:
     )
 
 
-# The small model does not always notice a question about a real patient, so code looks for the common signs too.
-_REAL_PATIENT = re.compile(r'\b(my patients?|bed\s*(no\.?\s*)?\d+|room\s*\d+|(mr|mrs|ms|miss)\.?\s+[A-Z])', re.I)
+# The small model misses many questions about a real patient (red team, 2026-11-11: "the lady I clerked this
+# morning", "Mukamana in side room two", "J.N. on our ward"), so code looks for the common signs too. Each sign
+# needs a person or a place with a number, so teaching questions ("I reviewed the guideline", "on our ward we
+# give 40 mg") still pass. A bare name cannot be caught this way; there the small model is the only guard.
+_NUMBER = r'(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b'
+_PERSON = r'(patients?|lady|ladies|man|men|woman|women|gentleman|boy|girl|child|baby|infant|kid|mum|mother|father)'
+_SAW = r"(clerked|admitted|saw|seen|reviewed|examined|assessed|am\s+looking\s+after|'m\s+looking\s+after|am\s+seeing|'m\s+seeing)"
+_REAL_PATIENT = re.compile(
+    r'\b('
+    r'my\s+patients?'
+    rf'|(bed|bay|cubicle|room|side\s*room)\s*(no\.?\s*)?{_NUMBER}'
+    r'|(mr|mrs|ms|miss)\.?\s+[a-z]'
+    rf'|{_PERSON}\s+(that\s+|who\s+)?(i|we)\s*(have\s+|just\s+)*{_SAW}'
+    rf'|(i|we)\s*(have\s+|just\s+)*{_SAW}\s+(a|an|the|this|that)\s+(\w+\s+)?{_PERSON}'
+    rf'|{_PERSON}\s+on\s+(my|our|the)\s+ward'
+    r'|on\s+(my|our)\s+ward\s+(right\s+)?now'
+    r')',
+    re.I,
+)
+# Initials such as "J.N.", in capitals only, so "e.g." and "i.e." do not count.
+_INITIALS = re.compile(r'\b[A-Z]\.\s?[A-Z]\.')
 
 
 def real_patient_in(question: str) -> bool:
-    return bool(_REAL_PATIENT.search(question))
+    return bool(_REAL_PATIENT.search(question) or _INITIALS.search(question))
 
 
 # The small model does not always name the group a question asks about, so code looks for the common ones too.
@@ -156,8 +182,17 @@ _GROUPS = {
 }
 
 
+# An age in years, months, weeks or days ("an 85-year-old", "a 6 year old", "3-month-old").
+_AGE = re.compile(r'\b(\d{1,3})[\s-]*(year|yr|month|week|day)s?[\s-]*old\b', re.I)
+ADULT_FROM, OLDER_FROM = 18, 65
+
+
 def group_in(question: str) -> str:
-    return next((group for group, pattern in _GROUPS.items() if pattern.search(question)), '')
+    named = next((group for group, pattern in _GROUPS.items() if pattern.search(question)), '')
+    if named or not (age := _AGE.search(question)):
+        return named
+    years = int(age.group(1)) if age.group(2).lower() in ('year', 'yr') else 0
+    return 'children' if years < ADULT_FROM else 'older adults' if years >= OLDER_FROM else ''
 
 
 async def search(query: Query, sources: list[Source]) -> tuple[list[Passage], list[str]]:
@@ -234,13 +269,21 @@ def check(
     return parts, sources, draft.disagree and len(kinds) == 2
 
 
+def _declined(question: str) -> Answer:
+    return Answer(question=question, parts=[], sources=[], disagree=False, declined=True, searched=[], notes=[], model='')
+
+
 async def answer(request: AskRequest, on_step: Callable[[str], None] = lambda step: None) -> Answer:
+    # Nothing is searched: the question may carry a person's details, and WardWise is for teaching only.
+    # The plain signs are checked first, so such a question never reaches the AI provider either.
+    if real_patient_in(request.question):
+        log.info('Question about a real patient declined before the AI saw it')
+        return _declined(request.question)
     on_step('Understanding your question')
     query = await asyncio.to_thread(rewrite, request, on_step)
     if query.real_patient:
-        # Nothing is searched: the question may carry a person's details, and WardWise is for teaching only.
         log.info('Question about a real patient declined')
-        return Answer(question=query.question, parts=[], sources=[], disagree=False, declined=True, searched=[], notes=[], model='')
+        return _declined(query.question)
 
     on_step('Searching your session and the literature')
     # Cutting a long session into passages is plain computing; a thread keeps the server free for others meanwhile.

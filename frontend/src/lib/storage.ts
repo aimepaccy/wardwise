@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Question, StudyPack } from '@/types'
+import type { ChatTurn, Question, StudyPack } from '@/types'
 
 // Study packs live in this browser's IndexedDB, never on WardWise's server. Export is the student's backup copy.
 
@@ -18,6 +18,8 @@ export type SavedPack = {
   origin: 'written' | 'imported'
   pack: StudyPack
   material: PackMaterial
+  // Questions asked about the pack, oldest first. Packs saved before 2026-11-11 have none.
+  chat?: ChatTurn[]
 }
 
 export class StorageError extends Error {}
@@ -61,7 +63,7 @@ export async function withDatabase<T>(work: (db: IDBPDatabase<WardWiseDB>) => Pr
 }
 
 // Random ids from getRandomValues, which works on plain http too (crypto.randomUUID needs https).
-function newId() {
+export function newId() {
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
@@ -83,6 +85,18 @@ export function addQuiz(record: SavedPack, questions: Question[]) {
     const stored = await tx.store.get(record.id)
     const same = stored !== undefined && stored.savedAt === record.savedAt
     if (same) await tx.store.put({ ...stored, pack: { ...stored.pack, questions } })
+    await tx.done
+    return same
+  })
+}
+
+// Keeps the chat with its pack, with the same rule as addQuiz: only the same writing of the pack, in one transaction.
+export function saveChat(record: SavedPack, chat: ChatTurn[]) {
+  return withDatabase(async (db) => {
+    const tx = db.transaction('packs', 'readwrite')
+    const stored = await tx.store.get(record.id)
+    const same = stored !== undefined && stored.savedAt === record.savedAt
+    if (same) await tx.store.put({ ...stored, chat })
     await tx.done
     return same
   })

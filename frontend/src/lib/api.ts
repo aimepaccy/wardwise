@@ -13,6 +13,9 @@ const JOB_TIMEOUT_MS = 20 * 60_000
 const READING_TIMEOUT_MS = 20_000
 // The most teaching points the server takes to write a quiz from (a pack has at most 15).
 const MAX_QUIZ_POINTS = 30
+// The server's limits for a question's topic, and for a question itself.
+const MAX_TOPIC_CHARS = 200
+export const MAX_QUESTION_CHARS = 500
 
 export class ApiError extends Error {
   status: number | null
@@ -67,6 +70,14 @@ export function writeQuiz(record: SavedPack): Promise<{ job_id: string }> {
   return request('/api/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, CHECK_TIMEOUT_MS)
 }
 
+// A question about a pack. The server keeps no conversation and no session, so both go with every question:
+// the session to search, and the last few turns so a follow-up ("and in children?") can be understood.
+export function askQuestion(record: SavedPack, question: string, history: { question: string; answer: string }[]): Promise<{ job_id: string }> {
+  const { notes, transcript } = record.material
+  const body = JSON.stringify({ notes, transcript, question, history, topic: record.pack.title.slice(0, MAX_TOPIC_CHARS) })
+  return request('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, CHECK_TIMEOUT_MS)
+}
+
 // A GET with the term in the address: the server only looks things up, nothing is stored or changed.
 export function findReading(term: string): Promise<Reading> {
   const slow = 'WardWise took too long to find reading for this term. Please try again.'
@@ -76,8 +87,8 @@ export function findReading(term: string): Promise<Reading> {
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
 
 // Polling: ask "is it ready yet?" every 1.5 seconds until the job is done, has failed, or takes too long.
-export async function waitForJob(jobId: string, onStep: (step: string) => void): Promise<JobState> {
-  const giveUpAt = Date.now() + JOB_TIMEOUT_MS
+export async function waitForJob(jobId: string, onStep: (step: string) => void, timeoutMs = JOB_TIMEOUT_MS): Promise<JobState> {
+  const giveUpAt = Date.now() + timeoutMs
   let failedChecks = 0
   while (Date.now() < giveUpAt) {
     let job: JobState
@@ -101,6 +112,10 @@ export async function waitForJob(jobId: string, onStep: (step: string) => void):
     await wait(POLL_EVERY_MS)
   }
   throw new ApiError('WardWise is taking longer than expected. Please try again.')
+}
+
+export function messageOf(error: unknown) {
+  return error instanceof ApiError ? error.message : 'Something went wrong. Please try again.'
 }
 
 // FastAPI sends errors as { detail: "message" }, or { detail: [...] } for validation errors.
