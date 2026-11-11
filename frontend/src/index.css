@@ -6,6 +6,9 @@
 @import "@fontsource-variable/jetbrains-mono/wght.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
+/* Room for the Ask chat beside the pack: wide and tall enough. A phone on its side is wide but too short.
+   Keep in step with DOCKED in components/ask/AskDock.tsx. */
+@custom-variant dock (@media (width >= 48rem) and (height >= 37.5rem));
 
 /* Design tokens. Components use these names, never raw colours,
    so the dark theme only has to change the values below. */

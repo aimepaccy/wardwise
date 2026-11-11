@@ -278,7 +278,7 @@ export default function App() {
           {/* A new key starts each pack with fresh cards, quiz, reading and chat, including a pack written again.
               The chat docks on the right from tablet width; on phones it opens from an Ask button. */}
           {shown && (
-            <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_20rem] lg:grid-cols-[minmax(0,1fr)_23rem]">
+            <div className="grid items-start gap-6 dock:grid-cols-[minmax(0,1fr)_20rem] dock:lg:grid-cols-[minmax(0,1fr)_23rem]">
               <PackView
                 key={`${shown.record.id}:${shown.record.savedAt}`}
                 record={shown.record}

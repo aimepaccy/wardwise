@@ -9,8 +9,9 @@ import { useMediaQuery } from '@/hooks/use-media-query'
 import type { SavedPack } from '@/lib/storage'
 import type { ChatTurn } from '@/types'
 
-// Tailwind's `md`: tablets and up get the chat docked beside the pack; phones get a full-height sheet.
-const DOCKED = '(min-width: 768px)'
+// Tablets and up get the chat docked beside the pack; phones, upright or on their side, get a full-height sheet.
+// Same rule as the `dock` variant in index.css, which lays out the page's columns.
+const DOCKED = '(min-width: 768px) and (min-height: 600px)'
 
 const DESCRIPTION = 'AI-written answers from your session and the literature, each part with its source.'
 
