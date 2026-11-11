@@ -73,7 +73,7 @@ function Part({ part, sources, group, imported }: { part: AnswerPart; sources: A
       )}
       {!part.grounded && <Flag>WardWise could not find the quoted words in the sources it cites. Check it before you rely on it.</Flag>}
       {part.grounded && cited[0]?.kind === 'session' && (
-        <p className="text-xs text-muted-foreground italic">From your session: "{part.quote}"</p>
+        <p className="text-xs whitespace-pre-line text-muted-foreground italic">From your session: "{part.quote}"</p>
       )}
 
       <div className="flex flex-wrap gap-1.5">

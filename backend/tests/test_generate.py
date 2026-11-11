@@ -134,6 +134,30 @@ def test_quote_in_pieces_is_checked_piece_by_piece():
     assert not generate.is_grounded('her inhaler technique... of', material)  # a tiny piece proves nothing
 
 
+# Growing a short quote (widen): never part of another number, never past a sentence or a speaker.
+@pytest.mark.parametrize(('quote', 'material'), [
+    ('5 mg nebulised', 'Give salbutamol 2.5 mg nebulised every 20 minutes.'),
+    ('75 mg/kg', 'Magnesium sulphate 50-75 mg/kg in children.'),
+    ('5 mg IM', 'Adrenaline 0.5 mg IM into the thigh.'),
+])
+def test_a_short_quote_is_not_grown_from_inside_another_dose(quote, material):
+    assert generate.occurrences(quote, material) == 1  # the words match, but as part of another number
+    assert generate.widen(quote, material) is None
+
+
+@pytest.mark.parametrize(('quote', 'material', 'grown'), [
+    ('over 20 minutes', 'Magnesium sulphate: 2 g IV over 20 minutes.\n', 'Magnesium sulphate: 2 g IV over 20 minutes.'),
+    ('over 20 minutes', 'Magnesium 2 g IV\nover 20 minutes\nAminophylline 5 mg/kg loading\n', 'Magnesium 2 g IV\nover 20 minutes'),
+    ('over 20 minutes', 'Over 20 minutes for magnesium in severe asthma. Then reassess.', 'Over 20 minutes for magnesium in severe asthma.'),
+    ('over 20 minutes', 'Give it over 20 minutes. Consultant:', 'Give it over 20 minutes.'),
+    ('20 minutes later', 'Recheck the gas (e.g. 20 minutes later) before stopping.', 'Recheck the gas (e.g. 20 minutes later) before stopping.'),
+    ('2 g IV', 'Student: Magnesium? Consultant: Yes, 2 g IV. Then a senior review.',
+     'Magnesium? Consultant: Yes, 2 g IV.'),  # the question the dose answers
+])
+def test_a_short_quote_grows_to_its_sentence_and_borrows_the_one_before_when_too_short(quote, material, grown):
+    assert generate.widen(quote, material) == grown
+
+
 # Clinical meaning lives in symbols and units: these must not match each other.
 def test_grounding_keeps_symbols_and_units():
     assert not generate.is_grounded('give salbutamol 5 µg now', 'Give salbutamol 5 g now.')

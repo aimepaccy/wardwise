@@ -122,6 +122,62 @@ def test_quotes_are_checked_against_the_cited_passages(fake_writer):
     assert [part.grounded for part in answer.parts] == [True, False]
 
 
+ROUND = (
+    'Consultant: Give salbutamol back to back.\n'
+    'Consultant: If she is still not improving, a single dose of magnesium sulphate 1.2 to 2 g intravenously '
+    'over 20 minutes. Discuss with a senior first.\n'
+)
+
+
+def checked(quote: str, *passages: Passage, session_text=ROUND) -> tuple[bool, str]:
+    part = {'text': 'An answer part.', 'sources': list(range(1, len(passages) + 1)), 'quote': quote, 'applies': 'yes'}
+    parts, _, _ = ask.check(AnswerDraft.model_validate({'parts': [part], 'disagree': False}), list(passages), session_text)
+    return parts[0].grounded, parts[0].quote
+
+
+SESSION = Passage('session', 'Your recording', ROUND)
+
+
+def test_a_correct_short_quote_is_grown_to_its_sentence_from_the_source():
+    assert checked('over 20 minutes', SESSION) == (
+        True, 'If she is still not improving, a single dose of magnesium sulphate 1.2 to 2 g intravenously over 20 minutes.')
+
+
+def test_a_short_dose_from_an_article_is_grown_inside_the_article():
+    article = Passage('pubmed', 'Magnesium in children', 'Children received magnesium sulfate 50-75mg/kg over 20 minutes in the trial.')
+    assert checked('50-75mg/kg', article, session_text='') == (
+        True, 'Children received magnesium sulfate 50-75mg/kg over 20 minutes in the trial.')
+
+
+def test_a_short_quote_said_twice_stays_not_found_since_either_could_be_meant():
+    twice = ROUND + 'Consultant: Aminophylline is also given over 20 minutes as a loading dose.\n'
+    assert checked('over 20 minutes', Passage('session', 'Your recording', twice), session_text=twice) == (
+        False, 'over 20 minutes')
+    article = Passage('pubmed', 'Magnesium', 'Infused over 20 minutes.')
+    assert checked('over 20 minutes', SESSION, article) == (False, 'over 20 minutes')
+
+
+def test_a_short_quote_is_grown_only_from_a_passage_the_ai_was_given():
+    # In the session, but only outside the passage cited: a match there would be chance, not the AI's source.
+    cited = Passage('session', 'Your recording', 'Consultant: Give salbutamol back to back.')
+    assert checked('over 20 minutes', cited) == (False, 'over 20 minutes')
+
+
+@pytest.mark.parametrize('quote', ['over 30 minutes', '20 minutes', 'salbutamol ... magnesium ... senior', 'over 20 minutes in'])
+def test_made_up_stitched_and_two_word_quotes_are_never_grown(quote):
+    assert checked(quote, SESSION) == (False, quote)
+
+
+def test_a_long_sentence_is_cut_around_the_quote_and_a_short_one_borrows_from_its_neighbour():
+    long = ' '.join(f'w{i}' for i in range(40)) + ' dose over 20 minutes ' + ' '.join(f'v{i}' for i in range(40)) + '.'
+    grounded, quote = checked('over 20 minutes', Passage('session', 'Your notes', long), session_text=long)
+    assert grounded and 'dose over 20 minutes' in quote and len(quote.split()) <= 25
+    assert quote.split()[0] != 'w0' and quote.split()[-1] != 'v39.'
+    short = 'Consultant: Give magnesium sulphate intravenously. Over 20 minutes.\n'
+    assert checked('over 20 minutes', Passage('session', 'Your recording', short), session_text=short) == (
+        True, 'Give magnesium sulphate intravenously. Over 20 minutes.')
+
+
 def test_sources_are_numbered_by_document_and_carry_real_links(fake_writer, literature):
     other = Passage('pubmed', 'Steroids in acute asthma', 'A second passage of the same article.', ARTICLE.url, ARTICLE.detail)
     literature[0].passages = [ARTICLE, other]

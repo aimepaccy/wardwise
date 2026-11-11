@@ -403,3 +403,7 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **Race condition, stale events** (fundamental): two things happening in an order you did not plan, such as an old sentence reporting "ended" after a new one started. WardWise gives each run a number and ignores events with an old one.
 - **Separation of concerns, testable core** (fundamental): keep the logic (the queue) apart from the framework (React) so it can be tested on its own with a stand-in (a *fake*).
 
+### Red-team item (c). Short quotes (2026-11-11)
+- **Evidence span** (detail): the stretch of source text shown as proof for a claim. Too short and it proves little ("over 20 minutes" fits any drug); WardWise grows a short one to its sentence.
+- **Tokenisation** (fundamental): how text is cut into the units a program compares. WardWise's quote check cuts "2.5" into "2" and "5", which is why a match must cover whole pieces of text, or "5 mg" would match inside "2.5 mg".
+- **Replay testing** (detail): running saved real outputs (here, the red team's answers) through changed code, to see the effect on real cases without new AI calls.

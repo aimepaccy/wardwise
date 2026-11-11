@@ -64,6 +64,10 @@ TAG_ALLOWANCE = 100
 # A quote shorter than this proves little: "asthma" appears in any asthma session.
 MIN_QUOTE_WORDS = 4
 MIN_PIECE_WORDS = 3
+# A short quote grown from its source (widen) ends up with at least this many words where the text allows,
+# and never more than the most.
+WIDEN_MIN_WORDS = 6
+WIDEN_MAX_WORDS = 25
 # Pieces of a "..." quote must come in order and close together, or they could join unrelated passages.
 MAX_GAP_WORDS = 40
 MAX_SEARCH_TERMS = 6
@@ -379,6 +383,72 @@ def is_grounded(quote: str, material: str) -> bool:
     return _locate(quote, _words(material)) is not None
 
 
+def occurrences(quote: str, material: str) -> int:
+    """How many times the quote's words appear in a row in the material."""
+    piece, source = _words(quote), _words(material)
+    if not piece:
+        return 0
+    return sum(source[i : i + len(piece)] == piece for i in range(len(source) - len(piece) + 1))
+
+
+def widen(quote: str, material: str) -> str | None:
+    """The quote's words as written in the material, grown to the sentence around them, or None.
+
+    A correct quote can be too short to count ("over 20 minutes"). Grown from the source, it shows the reader
+    what the words were said about, and every word shown is still the source's own. Growth stops at the end
+    of a sentence, a new line or a speaker's name ("Consultant:"). A sentence under WIDEN_MIN_WORDS takes in
+    the one before it, or the one after if it comes first. The caller decides whether the quote is unique
+    enough to grow: this takes its first appearance.
+    """
+    chunks = list(re.finditer(r'\S+', material))
+    chunk_words = [_words(chunk.group()) for chunk in chunks]
+    counts = [len(words) for words in chunk_words]
+    owner = [index for index, count in enumerate(counts) for _ in range(count)]
+    piece = _words(quote)
+    found = _find([word for words in chunk_words for word in words], piece, start=0) if piece else None
+    if found is None:
+        return None
+    end = found + len(piece)
+    # Whole pieces of text only: "5 mg nebulised" inside "2.5 mg nebulised" is another dose, not this one.
+    if (found > 0 and owner[found - 1] == owner[found]) or (end < len(owner) and owner[end] == owner[end - 1]):
+        return None
+
+    def full_stop(index: int) -> bool:
+        if index + 1 >= len(chunks) or '\n' in material[chunks[index].end() : chunks[index + 1].start()]:
+            return True
+        text = chunks[index].group()
+        return text.rstrip(_CLOSERS)[-1:] in ('.', '!', '?', ';') and text.casefold() not in _NOT_AN_END
+
+    def label(index: int) -> bool:
+        # "Consultant:" opening a line or a sentence; "Magnesium sulphate: 2 g" is not a label.
+        return chunks[index].group().endswith(':') and counts[index] == 1 and (index == 0 or full_stop(index - 1))
+
+    def ends_sentence(index: int) -> bool:
+        return full_stop(index) or label(index)
+
+    def fits(index: int) -> bool:
+        return sum(counts[first : last + 1]) + counts[index] <= WIDEN_MAX_WORDS
+
+    first, last = owner[found], owner[end - 1]
+    # Within the sentence, both sides in turn, left first, since what a fragment is about usually comes before it.
+    while True:
+        grown = False
+        if first > 0 and not ends_sentence(first - 1) and fits(first - 1):
+            first, grown = first - 1, True
+        if last + 1 < len(chunks) and not ends_sentence(last) and fits(last + 1):
+            last, grown = last + 1, True
+        if not grown:
+            break
+    # Too short to stand alone ("Over 20 minutes."): the sentence before, to its start.
+    while first > 0 and fits(first - 1) and (sum(counts[first : last + 1]) < WIDEN_MIN_WORDS or not ends_sentence(first - 1)):
+        first -= 1
+    while last + 1 < len(chunks) and fits(last + 1) and (sum(counts[first : last + 1]) < WIDEN_MIN_WORDS or not ends_sentence(last)):
+        last += 1
+    if last > first and label(last):
+        last -= 1
+    return material[chunks[first].start() : chunks[last].end()].strip(',;:')
+
+
 def _find(words: list[str], piece: list[str], start: int) -> int | None:
     for index in range(start, len(words) - len(piece) + 1):
         if words[index : index + len(piece)] == piece:
@@ -415,6 +485,10 @@ def _shuffled(question) -> tuple[list[Option], str]:
 
 # A sentence ends at . ! or ? followed by a space, but not after a few common abbreviations.
 _SENTENCE_END = re.compile(r'(?<!\be\.g\.)(?<!\bi\.e\.)(?<!\bDr\.)(?<!\bvs\.)(?<=[.!?])\s+')
+# The same rule for widen, which looks at one piece of text at a time: a full stop inside a closing bracket
+# or quotation mark still ends the sentence.
+_NOT_AN_END = ('e.g.', 'i.e.', 'dr.', 'vs.')
+_CLOSERS = ')]"\'”’'
 
 
 def _count(units: list[tuple[str, bool]]) -> int:

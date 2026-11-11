@@ -21,7 +21,18 @@ from pydantic import ValidationError
 from app import providers
 from app.ask.sources import LITERATURE, Passage, Query, Session, Source
 from app.config import get_settings
-from app.generate import _no_links, _tries, _untag, _waiting, is_grounded
+from app.generate import (
+    MIN_PIECE_WORDS,
+    MIN_QUOTE_WORDS,
+    _no_links,
+    _tries,
+    _untag,
+    _waiting,
+    _words,
+    is_grounded,
+    occurrences,
+    widen,
+)
 from app.reading import MAX_TERM_CHARS, clean_term
 from app.schemas import Answer, AnswerDraft, AnswerPart, AnswerSource, AskRequest, QuestionDraft
 
@@ -304,6 +315,27 @@ def _material(query: Query, passages: list[Passage]) -> str:
     return '\n\n'.join(blocks) + f'\n\n<question>\n{_untag(query.question)}\n</question>' + about
 
 
+def _widened(quote: str, cited: list[Passage], session_text: str) -> str | None:
+    """A correct quote just too short to count, grown from its source into one that does, or None.
+
+    Only a quote of exactly MIN_PIECE_WORDS words, with no "...", that appears once in all the part cites.
+    For the session that means once in the whole session, as its grounding does: "over 20 minutes" said of
+    two drugs could be grown from the wrong one, so it stays not found. It is grown only inside a passage the
+    AI was given (and the student can open with the words highlighted), never from text the AI never saw,
+    where a match would be chance. A made-up quote is never grown, since it is not there.
+    """
+    if '...' in quote or '…' in quote or not MIN_PIECE_WORDS <= len(_words(quote)) < MIN_QUOTE_WORDS:
+        return None
+    articles = list(dict.fromkeys(passage.text for passage in cited if passage.kind != 'session'))
+    in_session = occurrences(quote, session_text) if any(passage.kind == 'session' for passage in cited) else 0
+    if in_session + sum(occurrences(quote, text) for text in articles) != 1:
+        return None
+    for passage in cited:
+        if (wider := widen(quote, passage.text)) and is_grounded(wider, passage.text):
+            return wider
+    return None
+
+
 def check(
     draft: AnswerDraft, passages: list[Passage], session_text: str, group: str = '', population: str = '',
 ) -> tuple[list[AnswerPart], list[AnswerSource], bool]:
@@ -332,6 +364,9 @@ def check(
         cited_text = '\n'.join(passages[n - 1].text for n in cited)
         # A quote may run past the edge of a session passage, so for the session the whole session counts.
         grounded = is_grounded(draft_part.quote, cited_text) or (from_session and is_grounded(draft_part.quote, session_text))
+        quote = draft_part.quote.strip()
+        if not grounded and (wider := _widened(quote, [passages[n - 1] for n in cited], session_text)):
+            quote, grounded = wider, True
         part_numbers = []
         for n in cited:
             passage = passages[n - 1]
@@ -341,7 +376,7 @@ def check(
             if number not in part_numbers:
                 part_numbers.append(number)
         parts.append(AnswerPart(
-            text=text, sources=part_numbers, quote=draft_part.quote.strip(), grounded=grounded,
+            text=text, sources=part_numbers, quote=quote, grounded=grounded,
             group_unclear=(bool(group) and draft_part.applies == 'not stated') or mixed,
         ))
 

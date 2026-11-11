@@ -447,3 +447,10 @@ Preview, build, Edge checks, Quality review, walkthrough. Explain-back from phas
 - **Logic out of the UI framework:** the queue became a plain class, so its timing (stale events, pause and resume, interruptions, failures) is tested with a stand-in engine, without a browser. The React hook only connects it to the screen.
 - **Tools:** the Quality reviewer found five must-fix items, four of them about safety or access rather than code style. A stand-in voice in Playwright let the whole run be checked without the laptop speaking.
 
+## 2026-11-11: Red-team item (c), short quotes in Ask
+Evidence first, then build, Quality review, fixes. Explain-back from item 5, right: the warning comes before the point so the listener hears the point already framed as unchecked. The fuller reason: audio is serial, so a warning after the words arrives once they have been taken in as fact; on screen the badge and the text are seen together.
+- **Read the failures before fixing:** the saved red-team answers had 5 flagged quotes in 56 parts. Two were correct but short (the bug), one was invented, one stitched from scraps (both rightly flagged). Simply lowering the floor would have let any three-word phrase vouch for a claim.
+- **Keep the threshold, add context:** instead of trusting a three-word phrase, WardWise shows the sentence it sits in, from the source. Stronger evidence for the reader, and still no word that is not the source's own.
+- **Ambiguity means no:** a phrase said twice could be grown from the wrong drug, so it stays not found. When code cannot tell which one was meant, it should not guess.
+- **The reviewer found the dangerous edge:** the matcher splits "2.5" into "2" and "5", so "5 mg nebulised" matched inside "2.5 mg nebulised" and would have been marked found: a tenfold dose error with a green tick. A short fragment is weak evidence in exactly the place (doses) where errors cost most. Fixed by requiring whole pieces of text, with tests for decimals and ranges.
+- **Tools:** replaying saved red-team outputs through the new code tested the fix on real model answers, at no AI cost, in seconds.
