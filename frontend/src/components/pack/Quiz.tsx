@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowRight, Check, RotateCcw, Trophy, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,8 +10,18 @@ import type { Question } from '@/types'
 const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
 type Letter = (typeof LETTERS)[number]
 
-export function Quiz({ questions }: { questions: Question[] }) {
+type QuizProps = {
+  questions: Question[]
+  // Where each question comes from, shown above it, for a quiz mixed from several packs.
+  sources?: string[]
+  // What to suggest after a full score, where the pack's flashcards are not at hand.
+  fullMarksHint?: string
+}
+
+export function Quiz({ questions, sources, fullMarksHint = 'Every one right. Try the flashcards to keep it fresh.' }: QuizProps) {
   const [index, setIndex] = useState(0)
+  // Ids unique to this quiz: a week's quiz can be open over a pack's own.
+  const id = useId()
   // One entry per question: the letter chosen, or null while unanswered.
   const [chosen, setChosen] = useState<(Letter | null)[]>(() => questions.map(() => null))
   // Set when the student moves on, so the next question's text takes keyboard focus once it appears.
@@ -41,16 +51,16 @@ export function Quiz({ questions }: { questions: Question[] }) {
         <div className="grid size-12 place-items-center rounded-full bg-accent text-accent-foreground">
           <Trophy className="size-6" aria-hidden="true" />
         </div>
-        <p id="quiz-score" className="text-lg font-semibold">
+        <p id={`${id}-score`} className="text-lg font-semibold">
           You scored {score} out of {questions.length}.
         </p>
         <p className="max-w-md text-sm text-muted-foreground">
           {score === questions.length
-            ? 'Every one right. Try the flashcards to keep it fresh.'
+            ? fullMarksHint
             : 'Go back over the explanations for the ones you missed, then try again.'}
         </p>
         {/* Focus lands here, and the description makes screen readers read the score with it. */}
-        <Button onClick={restart} autoFocus aria-describedby="quiz-score">
+        <Button onClick={restart} autoFocus aria-describedby={`${id}-score`}>
           <RotateCcw />
           Try again
         </Button>
@@ -91,8 +101,14 @@ export function Quiz({ questions }: { questions: Question[] }) {
           transition={spring}
           className="flex flex-col gap-3"
         >
+          {sources?.[index] && (
+            <p id={`${id}-from-${index}`} className="text-xs font-medium text-muted-foreground">
+              {sources[index]}
+            </p>
+          )}
           <p
-            id={`stem-${index}`}
+            id={`${id}-stem-${index}`}
+            aria-describedby={sources?.[index] ? `${id}-from-${index}` : undefined}
             tabIndex={-1}
             ref={(node) => {
               if (node && moved.current) {
@@ -105,7 +121,7 @@ export function Quiz({ questions }: { questions: Question[] }) {
             {question.stem}
           </p>
 
-          <ul role="list" aria-labelledby={`stem-${index}`} className="flex flex-col gap-2">
+          <ul role="list" aria-labelledby={`${id}-stem-${index}`} className="flex flex-col gap-2">
             {question.options.map((option, i) => {
               const letter = LETTERS[i]
               const right = letter === question.answer

@@ -65,10 +65,12 @@ The day's summary read aloud, for a student who is eating or walking. Browsers h
 
 ### High-yield cards and weekly reports (from the dean, 2026-10-22)
 A short set of the most exam-relevant points from each pack, gathered into a weekly report across the week's packs. Builds on organising packs by week.
+- 2026-11-11 (build item 6): high-yield cards dropped for now (Rugimbana's call); the week gets highlights in prose instead, read aloud, which suit the weekend and listening. If cards come back, mark "high-yield" from what the teacher signalled (stressed, repeated, safety, linked to exams), checked by code, never the AI's own guess at exam relevance.
 
 ### Weekly reminders
 A weekly nudge: "You have 12 flashcards due" or "Review this week's rounds".
 - Email needs an address, so it follows accounts. Web push notifications work without accounts but need extra browser setup and are limited on iPhones.
+- The week highlights (build item 6b) are written when This week is first opened after Friday 18:00, since WardWise keeps nothing on its server and cannot send anything by itself. A push "Your week's highlights are ready" would be the natural first reminder.
 - Could follow spaced repetition (cards come back just before they would be forgotten), which has good evidence behind it.
 
 ### Simulation debriefs

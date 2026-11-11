@@ -4,6 +4,10 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+// Unit tests run in Kigali time on every machine, so tests about local dates (weeks) mean the same everywhere.
+// Set here, before the test workers start, so they inherit it.
+if (process.env.VITEST) process.env.TZ = 'Africa/Kigali'
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {

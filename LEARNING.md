@@ -454,3 +454,11 @@ Evidence first, then build, Quality review, fixes. Explain-back from item 5, rig
 - **Ambiguity means no:** a phrase said twice could be grown from the wrong drug, so it stays not found. When code cannot tell which one was meant, it should not guess.
 - **The reviewer found the dangerous edge:** the matcher splits "2.5" into "2" and "5", so "5 mg nebulised" matched inside "2.5 mg nebulised" and would have been marked found: a tenfold dose error with a green tick. A short fragment is weak evidence in exactly the place (doses) where errors cost most. Fixed by requiring whole pieces of text, with tests for decimals and ranges.
 - **Tools:** replaying saved red-team outputs through the new code tested the fix on real model answers, at no AI cost, in seconds.
+
+## 2026-11-11: Build item 6a, This week
+Preview, a challenge from Rugimbana that changed the plan, build, Edge checks, Quality review, walkthrough.
+- **The plan changed for the better:** high-yield cards were dropped in favour of week highlights in prose (6b), which suit listening and are more welcoming. The study week is Monday to Friday, with highlights from Friday 18:00, so the weekend is for review. The design question it raises: prose is harder to check than cards, so 6b writes from already-checked teaching points and cites them.
+- **Derived, not stored:** the week view is worked out from the saved packs every time it opens. Nothing new to save, nothing to go stale, nothing sent anywhere. The highlights will be the exception, since an AI call is costly to repeat.
+- **Time zones bite:** `savedAt` is UTC; weeks are cut in local time. The laptop runs in Egypt time (UTC+2 with summer time), so the tests pin themselves to Kigali to give the same answer on any machine.
+- **Two copies of one component on a page:** the week's quiz can sit over the pack's own quiz, and both used fixed ids (`stem-0`). `useId` gives each copy its own.
+- **Tools:** a hook running the type check after every edit was timed at about 12 seconds; see the verdict in the chat.

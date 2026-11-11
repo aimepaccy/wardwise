@@ -15,6 +15,7 @@ import { PrivacyNotice } from '@/components/PrivacyNotice'
 import { Recorder } from '@/components/Recorder'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { UploadsBar } from '@/components/UploadsBar'
+import { WeekView } from '@/components/WeekView'
 import { useLeaveWarning } from '@/hooks/use-leave-warning'
 import { useLimits } from '@/hooks/use-limits'
 import { useTheme } from '@/hooks/use-theme'
@@ -240,12 +241,15 @@ export default function App() {
             theme={theme}
             onThemeChange={chooseTheme}
             actions={
-              <Library
-                version={libraryVersion}
-                onOpenPack={(record) => setShown({ record, save: { status: 'saved' } })}
-                onDeleted={handleDeleted}
-                onDeletedAll={handleDeletedAll}
-              />
+              <>
+                <WeekView version={libraryVersion} onOpenPack={(record) => setShown({ record, save: { status: 'saved' } })} />
+                <Library
+                  version={libraryVersion}
+                  onOpenPack={(record) => setShown({ record, save: { status: 'saved' } })}
+                  onDeleted={handleDeleted}
+                  onDeletedAll={handleDeletedAll}
+                />
+              </>
             }
           />
           {!shown && <Hero />}

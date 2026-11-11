@@ -407,3 +407,11 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **Evidence span** (detail): the stretch of source text shown as proof for a claim. Too short and it proves little ("over 20 minutes" fits any drug); WardWise grows a short one to its sentence.
 - **Tokenisation** (fundamental): how text is cut into the units a program compares. WardWise's quote check cuts "2.5" into "2" and "5", which is why a match must cover whole pieces of text, or "5 mg" would match inside "2.5 mg".
 - **Replay testing** (detail): running saved real outputs (here, the red team's answers) through changed code, to see the effect on real cases without new AI calls.
+
+### Build item 6a. This week (2026-11-11)
+- **Aggregation, group by** (fundamental): sorting records into groups by a key and summarising each group, like `GROUP BY` in SQL or Aggregate in SPSS. WardWise groups saved packs by the Monday their week starts on.
+- **Derived data vs stored data** (fundamental): data worked out from other data each time it is needed, instead of saved. The week view is derived from the packs, so it can never disagree with them. Store only what is expensive to make again (the week highlights in 6b will be).
+- **UTC vs local time, time zones** (fundamental): computers usually store moments in UTC (`savedAt`), and people live in local time. Grouping by day or week must convert first: 23:00 UTC on a Sunday is already Monday in Kigali. Daylight saving time makes some local days 23 or 25 hours long, so add calendar days, not 24-hour blocks.
+- **Deterministic tests** (fundamental): tests that give the same result on any machine, any day. WardWise's week tests fix the time zone (Kigali) and the "now" they compare against, instead of reading the real clock.
+- **Interleaving** (learning science, a good bridge): mixing questions from different topics instead of practising one topic at a time. Harder in the moment, often better for long-term recall. The week quiz takes one question from each session in turn.
+- **Responsive design, breakpoint** (detail): a layout that changes with screen width at set widths (`sm` is 640 px in Tailwind). On phones the header buttons show only their icons, keeping their names for screen readers (`sr-only`).

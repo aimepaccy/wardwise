@@ -164,9 +164,10 @@ export function Library({ version, onOpenPack, onDeleted, onDeletedAll }: Librar
   return (
     <Dialog.Root open={open} onOpenChange={changeOpen}>
       <Dialog.Trigger asChild>
-        <Button variant="ghost" className="rounded-full">
+        <Button variant="ghost" className="rounded-full max-sm:px-2.5">
           <LibraryIcon aria-hidden="true" />
-          My packs
+          {/* Icon only on phones, where the header has no room; screen readers still hear the name. */}
+          <span className="max-sm:sr-only">My packs</span>
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
