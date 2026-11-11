@@ -394,3 +394,12 @@ The lab's four stations: switchboard (uvicorn), specimen reception (middleware),
 - **Soft filter vs hard filter**: a soft filter changes ranking (a nudge, nothing removed); a hard filter removes items outright. Match the hardness to the certainty: WardWise's guessed population only nudges the search and removes literature the AI marks as about another group, never the session's own teaching.
 - **Heuristic**: a rule of thumb in code that is usually right but not always (counting "child" and "adult" words to guess the patients). Cheap and testable, but it must be tried on realistic data: WardWise's one failed on a long, mixed round and was limited to short sessions.
 - **Schema description (as part of the prompt)**: in structured output, the descriptions of each field in the JSON form are sent to the model and read like instructions. An out-of-date description can quietly contradict the prompt.
+
+### Build item 5. Summaries read aloud (2026-11-11)
+- **Web Speech API (speech synthesis, text-to-speech)** (detail to look up): the browser's built-in way to speak text (`speechSynthesis.speak`) and, in its other half, to hear it. Each sentence is an *utterance* in a queue, with events when it ends or fails.
+- **Feature detection** (fundamental): checking whether the browser can do something before offering it (`'speechSynthesis' in window`), rather than guessing from the browser's name.
+- **Local vs online (cloud) processing** (fundamental for privacy): the same feature can run on the device or send data to a provider's servers. Speech voices are both kinds, side by side, and the browser reports which (`localService`).
+- **Text normalisation** (detail): rewriting text into the form a machine handles reliably, here into words a voice says correctly (".5 mg" to "0.5 milligrams").
+- **Race condition, stale events** (fundamental): two things happening in an order you did not plan, such as an old sentence reporting "ended" after a new one started. WardWise gives each run a number and ignores events with an old one.
+- **Separation of concerns, testable core** (fundamental): keep the logic (the queue) apart from the framework (React) so it can be tested on its own with a stand-in (a *fake*).
+

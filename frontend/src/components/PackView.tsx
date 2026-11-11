@@ -123,7 +123,7 @@ export function PackView({ record, save, onQuizWritten }: PackViewProps) {
             </Tabs.List>
 
             <Tabs.Content value="summary" className="outline-none">
-              <Summary pack={pack} />
+              <Summary pack={pack} imported={record.origin === 'imported'} />
             </Tabs.Content>
 
             {/* Kept mounted while hidden, so switching tabs does not lose the place in the cards or the quiz.

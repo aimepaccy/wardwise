@@ -1,13 +1,42 @@
+import { useEffect, useMemo, useRef } from 'react'
 import { motion } from 'motion/react'
 import { CircleCheck, Eye } from 'lucide-react'
+import { ReadAloud } from '@/components/pack/ReadAloud'
 import { Source } from '@/components/pack/Source'
+import { useSpeech } from '@/hooks/use-speech'
 import { plural } from '@/lib/format'
+import { readingScript } from '@/lib/speech'
 import { groupByTopic } from '@/lib/topics'
+import { cn } from '@/lib/utils'
 import type { StudyPack } from '@/types'
 
-export function Summary({ pack }: { pack: StudyPack }) {
+// The part being read is scrolled clear of the player at the top and the Generate bar at the bottom.
+const CLEAR_OF_BAR = 'scroll-mt-32 scroll-mb-[calc(var(--bar-space,1rem)+1rem)]'
+
+export function Summary({ pack, imported }: { pack: StudyPack; imported: boolean }) {
+  // Only what is read: a quiz written later replaces the pack object, and must not stop the reading.
+  const { title, overview, summary, uncovered, passage_count } = pack
+  const items = useMemo(
+    () => readingScript({ title, overview, summary, uncovered, passage_count }, imported),
+    [title, overview, summary, uncovered, passage_count, imported],
+  )
+  const speech = useSpeech(items)
+  const spoken = speech.current === null ? null : items[speech.current]?.key
+  const ref = useRef<HTMLDivElement>(null)
+
+  // The part being read stays in view, so the student can read along.
+  useEffect(() => {
+    if (!spoken) return
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ref.current
+      ?.querySelector(`[data-spoken="${spoken}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: smooth ? 'smooth' : 'auto' })
+  }, [spoken])
+
   return (
-    <div className="flex flex-col gap-6">
+    <div ref={ref} className="flex flex-col gap-6">
+      <ReadAloud speech={speech} items={items} />
+
       {pack.overview.length > 0 && (
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">Overview</h3>
@@ -18,7 +47,17 @@ export function Summary({ pack }: { pack: StudyPack }) {
           </p>
           <div className="flex flex-col gap-3 text-sm leading-relaxed">
             {pack.overview.map((paragraph, index) => (
-              <p key={index}>{paragraph}</p>
+              <p
+                key={index}
+                data-spoken={`overview-${index}`}
+                className={cn(
+                  '-mx-2 rounded-md px-2 transition-colors',
+                  CLEAR_OF_BAR,
+                  spoken === `overview-${index}` && 'bg-accent/70',
+                )}
+              >
+                {paragraph}
+              </p>
             ))}
           </div>
         </section>
@@ -41,7 +80,12 @@ export function Summary({ pack }: { pack: StudyPack }) {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: number * 0.04 }}
-                  className="flex gap-3 rounded-lg border bg-background/50 p-3 text-sm leading-relaxed"
+                  data-spoken={`point-${number}`}
+                  className={cn(
+                    'flex gap-3 rounded-lg border bg-background/50 p-3 text-sm leading-relaxed transition-colors',
+                    CLEAR_OF_BAR,
+                    spoken === `point-${number}` && 'border-primary/50 bg-accent/50',
+                  )}
                 >
                   <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-accent text-[0.7rem] font-semibold text-accent-foreground">
                     {number}

@@ -61,7 +61,7 @@ When asthma comes up on day 1 and again on day 4, the second pack should not rep
 - Runs in the browser for personal packs (a small embedding model) or on the server once there are accounts and a lobby.
 
 ### Summaries read aloud (from the dean, 2026-10-22)
-The day's summary read aloud, for a student who is eating or walking. Browsers have speech built in (the Web Speech API), free and on the device, so no text leaves it. Voices vary by device; a downloadable audio file would need a server-side voice later.
+The day's summary read aloud, for a student who is eating or walking. Browsers have speech built in (the Web Speech API), free and with no server of WardWise's. Voices vary by device, and some are online voices that send the text to their provider (Google's in Chrome, Microsoft's "Online (Natural)" voices in Edge), so WardWise prefers voices the browser lists as on the device. Built on 2026-11-11 (build item 5) for the Summary tab. Later: flashcards and quiz read aloud, a downloadable audio file (would need a server-side voice), and a check on phones with the screen locked.
 
 ### High-yield cards and weekly reports (from the dean, 2026-10-22)
 A short set of the most exam-relevant points from each pack, gathered into a weekly report across the week's packs. Builds on organising packs by week.
