@@ -220,7 +220,7 @@ class AnswerPartDraft(Strict):
     sources: list[int] = Field(description='The numbers of the passages this part rests on.')
     quote: str = Field(description='Words copied exactly from the first passage in sources.')
     applies: Literal['yes', 'not stated', 'no'] = Field(
-        description='Do the cited passages say they are about the group the question asks about? "yes" if the question names no group.'
+        description='Do the cited passages say they are about the group in <group>, or else the patients in <population>? "yes" if neither is given.'
     )
 
 
@@ -262,6 +262,8 @@ class Answer(BaseModel):
     disagree: bool
     # The patient group the question asks about, such as "children"; empty if none.
     group: str = ''
+    # When the question names no group: the patients the session is about, which the answer was written for.
+    population: str = ''
     # The question was about a real patient's care, so WardWise did not search or answer.
     declined: bool = False
     # The literature search terms used, so the student can see what was looked up.

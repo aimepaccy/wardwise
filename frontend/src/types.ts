@@ -122,6 +122,9 @@ export type Answer = {
   sources: AnswerSource[]
   disagree: boolean
   group: string
+  // When the question names no group: the patients the session is about, which the answer was written for.
+  // Missing from answers saved before 2026-11-11.
+  population?: string
   // About a real patient's care: nothing was searched or answered.
   declined: boolean
   searched: string[]

@@ -37,6 +37,16 @@ export function mentionsRealPatient(question: string) {
   return REAL_PATIENT.test(question) || INITIALS.test(question)
 }
 
+// The groups the server names, as a reader would say them.
+const GROUP_NAMES: Record<string, string> = { pregnancy: 'pregnant women' }
+
+// Who an answer was written for: the group the student named, or else the session's patients, which the server
+// assumed (only for a short session). Empty if neither, so nothing is shown.
+export function answeredFor(answer: Answer): { group: string; assumed: boolean } {
+  const group = answer.group || answer.population || ''
+  return { group: GROUP_NAMES[group] ?? group, assumed: !answer.group && Boolean(answer.population) }
+}
+
 export function declinedAnswer(question: string): Answer {
   return { question, parts: [], sources: [], disagree: false, group: '', declined: true, searched: [], notes: [], model: '' }
 }

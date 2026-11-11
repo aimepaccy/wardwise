@@ -10,8 +10,10 @@ One question goes through four steps:
 """
 
 import asyncio
+import dataclasses
 import logging
 import re
+from collections import Counter
 from collections.abc import Callable
 
 from pydantic import ValidationError
@@ -34,7 +36,8 @@ HISTORY_TURNS = 3
 HISTORY_CHARS = 600
 REWRITE_TOKENS = 1000
 # Room for the answer, reasoning included. Measured: a whole call (sent and written) used about 1,200 tokens with
-# a few passages, so answers stay well inside this. The pacer counts the full allowance, so a larger one would
+# a few passages, before session hits carried their neighbours (2026-11-11), which added about 500 tokens of
+# session text on a long round; answers stay well inside this. The pacer counts the full allowance, so a larger one would
 # make the next question wait for nothing.
 ANSWER_TOKENS = 1500
 SEARCH_SECONDS = 12
@@ -94,7 +97,10 @@ as well as the range, never instead of it.
 - Never carry a passage over to a group it does not describe. When the question names a group (given \
 between <group> tags), set applies for each part: "yes" only if its passages say they are about that group, \
 "no" if they say they are about another group, "not stated" if they do not say. For "not stated", write that \
-the passage does not say whether it applies to that group. If the question names no group, applies is "yes".
+the passage does not say whether it applies to that group. If the question names no group, it is about the \
+patients the session is about, given between <population> tags: set applies the same way (a children's dose \
+in mg/kg is "no" for adults), but write a "not stated" part as usual, without that remark. If neither tag is \
+given, applies is "yes".
 - No links, references or author names in the text; the numbers in sources are enough.
 - If the question asks about a real, identifiable patient, or for advice on a real patient's care, return \
 no parts.
@@ -140,7 +146,15 @@ def rewrite(request: AskRequest, on_step: Callable[[str], None]) -> Query:
         return Query(request.question, [], [], group_in(request.question), real_patient_in(request.question))
     keywords = [word.strip() for word in draft.keywords if 0 < len(word.strip()) <= MAX_KEYWORD_CHARS]
     question = draft.question.strip() or request.question
-    group = draft.group.strip()[:MAX_KEYWORD_CHARS] or group_in(question) or group_in(request.question)
+    group = draft.group.strip()[:MAX_KEYWORD_CHARS]
+    # The student's own words, this question and the earlier ones, so a follow-up keeps the group asked about.
+    asked = '\n'.join([*(turn.question for turn in request.history[-HISTORY_TURNS:]), request.question])
+    if group and _names(request.topic, group) and not _names(asked, group):
+        # Copied from the title ("in adults"), not asked (seen live): the session's population covers that,
+        # without flagging every passage that does not say "adults". Any other group the model names is kept,
+        # since the student's shorthand can be beyond code ("for the little ones").
+        group = ''
+    group = group or group_in(request.question)
     return Query(
         question, keywords[:MAX_KEYWORDS], _usable_terms(draft.search_terms),
         group, draft.real_patient or real_patient_in(request.question),
@@ -176,23 +190,86 @@ def real_patient_in(question: str) -> bool:
 
 # The small model does not always name the group a question asks about, so code looks for the common ones too.
 _GROUPS = {
-    'children': re.compile(r'\b(child|children|kids?|p(a)?ediatrics?|infants?|neonat\w*|newborns?|bab(y|ies)|toddlers?|adolescents?)\b', re.I),
+    'children': re.compile(
+        r'\b(child(?![\s-]?bearing)|children|kids?|p(a)?ediatrics?|p(a)?eds|infants?|neonat\w*|newborns?|bab(y|ies)'
+        r'|toddlers?|adolescents?|teen(ager)?s?)\b',
+        re.I,
+    ),
     'pregnancy': re.compile(r'\b(pregnan\w*|breastfeed\w*|lactat\w*)\b', re.I),
-    'older adults': re.compile(r'\b(elderly|older (adults?|people|patients?))\b', re.I),
+    'older adults': re.compile(r'\b(elderly|geriatrics?|older (adults?|people|patients?))\b', re.I),
 }
 
 
-# An age in years, months, weeks or days ("an 85-year-old", "a 6 year old", "3-month-old").
-_AGE = re.compile(r'\b(\d{1,3})[\s-]*(year|yr|month|week|day)s?[\s-]*old\b', re.I)
+# An age in years, months, weeks or days ("an 85-year-old", "a 6 year old", "3-month-old", "a 6 yo").
+_AGE = re.compile(r'\b(\d{1,3})(?:[\s-]*(year|yr|month|week|day)s?[\s-]*old\b|\s*(?:yo|y/o)\b)', re.I)
 ADULT_FROM, OLDER_FROM = 18, 65
+
+
+def _age_group(age: re.Match) -> str:
+    years = int(age.group(1)) if (age.group(2) or 'year').lower() in ('year', 'yr') else 0
+    return 'children' if years < ADULT_FROM else 'older adults' if years >= OLDER_FROM else 'adults'
 
 
 def group_in(question: str) -> str:
     named = next((group for group, pattern in _GROUPS.items() if pattern.search(question)), '')
     if named or not (age := _AGE.search(question)):
         return named
-    years = int(age.group(1)) if age.group(2).lower() in ('year', 'yr') else 0
-    return 'children' if years < ADULT_FROM else 'older adults' if years >= OLDER_FROM else ''
+    # An adult's age names no group: adults are what a question means by default.
+    return '' if (group := _age_group(age)) == 'adults' else group
+
+
+def _names(text: str, group: str) -> bool:
+    """Does the text name this group? "adults" counts if it says "adult", "children" if it says "paeds"."""
+    stems = [word[:5].casefold() for word in group.split() if len(word) > 3]
+    return group_in(text) == group or any(stem in text.casefold() for stem in stems)
+
+
+_ADULTS = re.compile(r'(?<!older )\badults?\b', re.I)
+
+
+def _counts(text: str) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    for group, pattern in [*_GROUPS.items(), ('adults', _ADULTS)]:
+        counts[group] += len(pattern.findall(text))
+    for age in _AGE.finditer(text):
+        counts[_age_group(age)] += 1
+    return +counts  # without the groups never mentioned
+
+
+# A session up to this many words is taken as one case. Fixed here, not taken from the AI allowance, so a change
+# of provider in .env cannot switch population guessing on for long rounds.
+POPULATION_MAX_WORDS = 1600
+# Mentions the session needs before its count is trusted, so "her kids are at home" does not make it children.
+POPULATION_MIN_MENTIONS = 2
+
+
+def population(topic: str, session: str) -> str:
+    """The patients a short session is about, for a question that names none: adults, children, pregnancy or
+    older adults.
+
+    Counted from group words and ages ("a 34-year-old") in the session or, if it says too little, the pack's
+    title. Only for a short session (see `POPULATION_MAX_WORDS`), which is usually one case. A long round moves
+    between patients, and counting near the answer was tried (2026-11-11): at topic edges it still picked up
+    the next patient's group (heart failure read as children after a child with malaria), so a long session
+    gets no assumed group. Empty too when two groups are close. A count, not a reading: the answer shows the
+    group it assumed.
+    """
+    if len(session.split()) > POPULATION_MAX_WORDS:
+        return ''
+    counts = _counts(session)
+    if max(counts.values(), default=0) < POPULATION_MIN_MENTIONS:
+        counts = _counts(topic)
+    (first, top), (_, second) = [*counts.most_common(2), ('', 0), ('', 0)][:2]
+    return first if top >= 2 * second and top else ''
+
+
+def _with_group(terms: list[str], group: str) -> list[str]:
+    """The search terms with the group put into the first one, keeping the plain term as a fallback.
+    Not for adults: most writing about adults never says so, and the word would only narrow the search."""
+    if not terms or group not in _GROUPS or _GROUPS[group].search(terms[0]):
+        return terms
+    first = f'{terms[0]} {group}'
+    return [first, *terms][:MAX_TERMS] if len(first.split()) <= MAX_TERM_WORDS else terms
 
 
 async def search(query: Query, sources: list[Source]) -> tuple[list[Passage], list[str]]:
@@ -213,23 +290,31 @@ async def search(query: Query, sources: list[Source]) -> tuple[list[Passage], li
     return passages, notes
 
 
-def _material(question: str, group: str, passages: list[Passage]) -> str:
+def _material(query: Query, passages: list[Passage]) -> str:
     blocks = [
         f'<passage n="{number}" source="{_LABELS[passage.kind]}: {_untag(passage.title)}">\n{_untag(passage.text)}\n</passage>'
         for number, passage in enumerate(passages, start=1)
     ]
-    asked_about = f'\n\n<group>{_untag(group)}</group>' if group else ''
-    return '\n\n'.join(blocks) + f'\n\n<question>\n{_untag(question)}\n</question>' + asked_about
+    if query.group:
+        about = f'\n\n<group>{_untag(query.group)}</group>'
+    elif query.population:
+        about = f'\n\n<population>{query.population}</population>'
+    else:
+        about = ''
+    return '\n\n'.join(blocks) + f'\n\n<question>\n{_untag(query.question)}\n</question>' + about
 
 
 def check(
-    draft: AnswerDraft, passages: list[Passage], session_text: str, group: str = '',
+    draft: AnswerDraft, passages: list[Passage], session_text: str, group: str = '', population: str = '',
 ) -> tuple[list[AnswerPart], list[AnswerSource], bool]:
     """Keep only parts that cite real passages; check each quote; number the cited sources from 1.
 
     A part with no valid citation is dropped rather than shown, since it would be the model speaking for itself.
     When the question names a group, a part the model says is about another group is dropped, and one whose
     passages do not say is flagged, so a dose taught for one group is never shown as the answer for another.
+    When it names none, the session's population stands in, more gently, since code guessed it: a literature
+    part about another group is dropped, but the session's own teaching never is, and unstated parts are not
+    flagged, since most writing about adults never says "adults".
     Passages from one document (one article, or the recording) share a number, so a source appears once.
     """
     numbers: dict[tuple, int] = {}
@@ -238,10 +323,13 @@ def check(
     for draft_part in draft.parts[:MAX_PARTS]:
         cited = list(dict.fromkeys(n for n in draft_part.sources if 1 <= n <= len(passages)))
         text = _no_links(draft_part.text).strip()
-        if not cited or not text or (group and draft_part.applies == 'no'):
-            continue
-        cited_text = '\n'.join(passages[n - 1].text for n in cited)
         from_session = any(passages[n - 1].kind == 'session' for n in cited)
+        other_group = draft_part.applies == 'no' and (group or (population and not from_session))
+        if not cited or not text or other_group:
+            continue
+        # The session's teaching mixed with a paper about another group: kept for the session, but flagged.
+        mixed = bool(population) and draft_part.applies == 'no' and any(passages[n - 1].kind != 'session' for n in cited)
+        cited_text = '\n'.join(passages[n - 1].text for n in cited)
         # A quote may run past the edge of a session passage, so for the session the whole session counts.
         grounded = is_grounded(draft_part.quote, cited_text) or (from_session and is_grounded(draft_part.quote, session_text))
         part_numbers = []
@@ -254,7 +342,7 @@ def check(
                 part_numbers.append(number)
         parts.append(AnswerPart(
             text=text, sources=part_numbers, quote=draft_part.quote.strip(), grounded=grounded,
-            group_unclear=bool(group) and draft_part.applies == 'not stated',
+            group_unclear=(bool(group) and draft_part.applies == 'not stated') or mixed,
         ))
 
     sources = []
@@ -285,6 +373,11 @@ async def answer(request: AskRequest, on_step: Callable[[str], None] = lambda st
         log.info('Question about a real patient declined')
         return _declined(query.question)
 
+    session_text = f'{request.notes}\n{request.transcript or ""}'
+    if not query.group:
+        patients = population(request.topic, session_text)
+        query = dataclasses.replace(query, population=patients, terms=_with_group(query.terms, patients))
+
     on_step('Searching your session and the literature')
     # Cutting a long session into passages is plain computing; a thread keeps the server free for others meanwhile.
     session = await asyncio.to_thread(Session, request.notes, request.transcript)
@@ -296,22 +389,21 @@ async def answer(request: AskRequest, on_step: Callable[[str], None] = lambda st
     if not passages:
         return Answer(
             question=query.question, parts=[], sources=[], disagree=False, group=query.group,
-            searched=query.terms, notes=notes, model='',
+            population=query.population, searched=query.terms, notes=notes, model='',
         )
 
     label = 'Writing the answer'
     on_step(label)
-    material = _material(query.question, query.group, passages)
-    session_text = f'{request.notes}\n{request.transcript or ""}'
+    material = _material(query, passages)
     settings = get_settings()
 
     def write() -> tuple[list[AnswerPart], list[AnswerSource], bool]:
         raw, _ = providers.write_json(ANSWER_INSTRUCTIONS, material, AnswerDraft, ANSWER_TOKENS, on_wait=_waiting(label, on_step))
-        return check(AnswerDraft.model_validate_json(raw), passages, session_text, query.group)
+        return check(AnswerDraft.model_validate_json(raw), passages, session_text, query.group, query.population)
 
     parts, sources, disagree = await asyncio.to_thread(_tries, write, 'Answer', 2, 'an answer')
     log.info('Answer written from %d passages (%d cited)', len(passages), len(sources))
     return Answer(
         question=query.question, parts=parts, sources=sources, disagree=disagree, group=query.group,
-        searched=query.terms, notes=notes, model=settings.llm_model,
+        population=query.population, searched=query.terms, notes=notes, model=settings.llm_model,
     )

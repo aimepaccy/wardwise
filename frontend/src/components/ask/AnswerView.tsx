@@ -10,7 +10,7 @@ import {
   ShieldAlert,
   type LucideIcon,
 } from 'lucide-react'
-import { NOT_ANSWERED, findQuote, sourceLink } from '@/lib/chat'
+import { NOT_ANSWERED, answeredFor, findQuote, sourceLink } from '@/lib/chat'
 import { cn } from '@/lib/utils'
 import type { Answer, AnswerPart, AnswerSource, SourceKind } from '@/types'
 
@@ -24,6 +24,7 @@ const KINDS: Record<SourceKind, { label: string; icon: LucideIcon; from: string;
 type AnswerViewProps = { answer: Answer; asked: string; imported: boolean }
 
 export function AnswerView({ answer, asked, imported }: AnswerViewProps) {
+  const { group, assumed } = answeredFor(answer)
   if (answer.declined) {
     return (
       <Notice icon={ShieldAlert}>
@@ -44,8 +45,13 @@ export function AnswerView({ answer, asked, imported }: AnswerViewProps) {
           ask your teacher which applies.
         </Notice>
       )}
+      {assumed && answer.parts.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          Answered for {group}, the patients in your session. To ask about another group, name it in your question.
+        </p>
+      )}
       {answer.parts.map((part, index) => (
-        <Part key={index} part={part} sources={answer.sources} group={answer.group} imported={imported} />
+        <Part key={index} part={part} sources={answer.sources} group={group} imported={imported} />
       ))}
       {answer.notes.length > 0 && <p className="text-xs text-muted-foreground">{answer.notes.join(' ')}</p>}
       <HowAnswered answer={answer} asked={asked} />

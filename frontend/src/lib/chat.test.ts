@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NOT_ANSWERED, findQuote, historyFor, keptTurns, mentionsRealPatient, sourceLink } from '@/lib/chat'
+import { NOT_ANSWERED, answeredFor, findQuote, historyFor, keptTurns, mentionsRealPatient, sourceLink } from '@/lib/chat'
 import { answerOf } from '@/test/answers'
 import type { Answer, ChatTurn } from '@/types'
 
@@ -51,6 +51,21 @@ describe('questions about a real patient', () => {
     ]) {
       expect(mentionsRealPatient(question)).toBe(false)
     }
+  })
+})
+
+describe('who an answer was written for', () => {
+  it('names a group the student asked about, without calling it assumed', () => {
+    expect(answeredFor(answerOf({ group: 'children' }))).toEqual({ group: 'children', assumed: false })
+  })
+
+  it("says when the session's patients were assumed, in words a reader would use", () => {
+    expect(answeredFor(answerOf({ population: 'adults' }))).toEqual({ group: 'adults', assumed: true })
+    expect(answeredFor(answerOf({ population: 'pregnancy' }))).toEqual({ group: 'pregnant women', assumed: true })
+  })
+
+  it('shows nothing for an answer saved before populations existed', () => {
+    expect(answeredFor(answerOf())).toEqual({ group: '', assumed: false })
   })
 })
 

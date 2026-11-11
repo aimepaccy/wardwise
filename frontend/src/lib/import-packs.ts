@@ -77,6 +77,7 @@ const answer = z
       .refine((sources) => new Set(sources.map((source) => source.number)).size === sources.length),
     disagree: z.boolean(),
     group: short,
+    population: short.optional(),
     declined: z.boolean(),
     searched: z.array(short).max(10),
     notes: z.array(short).max(10),

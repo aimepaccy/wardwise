@@ -105,6 +105,12 @@ describe('importing a chat', () => {
     expect(stored.chat?.[0].answer.parts[0].grounded).toBe(true)
   })
 
+  it('keeps the population an answer was written for, and imports answers saved before it existed', async () => {
+    expect((await importOne(turnWith({ population: 'adults' }))).chat?.[0].answer.population).toBe('adults')
+    await deleteAllPacks()
+    expect((await importOne(turnWith({}))).chat?.[0].answer.population).toBeUndefined()
+  })
+
   it('checks session quotes against the material, not the passages in the file', async () => {
     const forged = { ...sessionPart, quote: 'give fifty mg of adrenaline' }
     const sources = [{ number: 1, kind: 'session', title: 'Your recording', url: null, detail: '', passages: ['give fifty mg of adrenaline'] }]
