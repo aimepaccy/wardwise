@@ -10,10 +10,11 @@ import shutil
 import tempfile
 import threading
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app import ask, extract, generate, highlights, providers
+from app import ask, deidentify, extract, generate, highlights, providers
 from app.schemas import AskRequest, AudioKind, HighlightsRequest, JobState, Materials, PackRequest, QuizRequest
 
 # A result waits this long for the browser after the job finishes. A job still running is given up only
@@ -150,7 +151,16 @@ def run(job_id: str, work: JobInput) -> None:
             if not transcript:
                 warnings.append('No speech was heard in the recording.')
 
-        materials = Materials(transcript=transcript, notes=notes, warnings=warnings)
+        # Before the text goes back to the browser, so the names the check finds are not shown, saved or
+        # written up. (The audio and photos have already been to the transcription and reading services.)
+        removed: Counter = Counter()
+        if transcript or notes:
+            _update(job_id, status='working', step=deidentify.LABEL)
+            transcript, notes, removed, checked = deidentify.clean(transcript, notes)
+            if not checked:
+                warnings.append('WardWise could not check this session for names. Check the text below before you share it.')
+
+        materials = Materials(transcript=transcript, notes=notes, warnings=warnings, removed=deidentify.summary(removed))
         _update(job_id, status='done', step='Done', materials=materials)
     except Exception as error:
         _fail(job_id, error, 'Something went wrong while reading your material.')

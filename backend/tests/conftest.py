@@ -116,6 +116,7 @@ DEFAULT_ANSWERS = {
     'HighlightsDraft': lambda: {
         'highlights': [{'heading': 'Steroids in acute asthma', 'text': 'Prednisolone is given for five days.', 'points': [1]}],
     },
+    'Identifiers': lambda: {'items': []},
     'AnswerDraft': lambda: {
         'parts': [{'text': 'In your session, prednisolone is given for five days.', 'sources': [1],
                    'quote': 'once daily for five days', 'applies': 'yes'}],

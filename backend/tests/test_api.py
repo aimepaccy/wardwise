@@ -230,7 +230,7 @@ def test_request_cap_fits_the_largest_real_upload():
 def test_job_transcribes(fake_transcribe):
     state = finished_job(post(audio=('round.webm', WEBM)))
     assert state['status'] == 'done'
-    assert state['materials'] == {'transcript': FAKE_TRANSCRIPT, 'notes': None, 'warnings': []}
+    assert state['materials'] == {'transcript': FAKE_TRANSCRIPT, 'notes': None, 'warnings': [], 'removed': []}
 
 
 def test_audio_reaches_the_provider_under_a_generic_name(fake_transcribe):

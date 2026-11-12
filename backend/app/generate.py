@@ -134,7 +134,9 @@ _IMPORTANCE = (
 )
 _TEACHING_ONLY = (
     '- Teach only the clinical teaching. Leave out jokes, small talk, personal remarks, and talk that does '
-    'not teach, such as plans for the day.'
+    'not teach, such as plans for the day.\n'
+    '- Never name a person. Names in the material are replaced by [name]: call a patient by age and sex '
+    '("a 6-year-old girl") or "the patient", never [name].'
 )
 _QUESTION_RULES = (
     '- Questions are phrased positively. No "NOT" or "EXCEPT" questions.\n'

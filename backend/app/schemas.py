@@ -35,6 +35,8 @@ class Materials(BaseModel):
     # Handwritten notes as WardWise read them from photos, in the order the photos were added.
     notes: str | None = None
     warnings: list[str]
+    # What was taken out before the text left the server, for the student: ["2 names", "1 number"].
+    removed: list[str] = []
 
 
 JobStatus = Literal['queued', 'working', 'done', 'failed']

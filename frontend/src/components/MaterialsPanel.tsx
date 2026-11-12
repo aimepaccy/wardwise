@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { Popover } from 'radix-ui'
-import { AlertTriangle, ChevronDown, Mic, NotebookPen, PenLine, ScanText, Undo2, X, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Mic, NotebookPen, PenLine, ScanText, ShieldCheck, Undo2, X, type LucideIcon } from 'lucide-react'
 import { Panel } from '@/components/Panel'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -39,6 +39,7 @@ export function MaterialsPanel({ heard, draft, locked, attention, onChange, onCl
   const confirmTextId = useId()
   const still = useReducedMotion()
   const { transcript, notes, warnings } = draft
+  const checkFailed = warnings.some((warning) => warning.includes('could not check this session for names'))
 
   // A smooth scroll started while the page is still settling gets cancelled, so it waits a moment.
   useEffect(() => {
@@ -116,6 +117,17 @@ export function MaterialsPanel({ heard, draft, locked, attention, onChange, onCl
               </li>
             ))}
           </ul>
+        )}
+
+        {/* Stays visible when folded too. Not shown when the check failed: the warning above says so instead. */}
+        {draft.removed && draft.removed.length > 0 && !checkFailed && (
+          <p className="mb-4 flex items-start gap-2 rounded-lg border border-primary/25 bg-primary/8 p-3 text-sm">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+            <span>
+              Taken out before this text was shown to you, saved or used for your pack: {listed(draft.removed)}. Each
+              appears below as a tag, such as <Redacted label="name" />. Check for any it missed.
+            </span>
+          </p>
         )}
 
         {/* Folded, a glimpse of the text itself invites a look; it opens the panel. */}
@@ -284,7 +296,7 @@ function MarkedText({ text, marks, check }: { text: string; marks: Mark[]; check
   const parts: ReactNode[] = []
   let at = 0
   marks.forEach((mark, order) => {
-    parts.push(text.slice(at, mark.start))
+    parts.push(<Plain key={`p${at}`} text={text.slice(at, mark.start)} />)
     const word = text.slice(mark.start, mark.end)
     const style = { '--order': Math.min(order, 30) } as CSSProperties
     parts.push(
@@ -301,8 +313,30 @@ function MarkedText({ text, marks, check }: { text: string; marks: Mark[]; check
     )
     at = mark.end
   })
-  parts.push(text.slice(at))
+  parts.push(<Plain key={`p${at}`} text={text.slice(at)} />)
   return <>{parts}</>
+}
+
+const PLACEHOLDER = /\[(name|number|place|date)\]/g
+
+// Text between marks, with the server's placeholders drawn as small tags so they read as deliberate.
+function Plain({ text }: { text: string }) {
+  const pieces = text.split(PLACEHOLDER)
+  if (pieces.length === 1) return <>{text}</>
+  // split() with a capture group alternates text and the captured label.
+  return <>{pieces.map((piece, index) => (index % 2 ? <Redacted key={index} label={piece} /> : piece))}</>
+}
+
+function Redacted({ label }: { label: string }) {
+  return (
+    <span className="mx-px inline-flex items-center rounded-sm bg-muted px-1.5 align-baseline font-mono text-[0.78em] leading-normal text-muted-foreground">
+      {label}
+    </span>
+  )
+}
+
+function listed(items: string[]) {
+  return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
 }
 
 type WordCheckProps = {

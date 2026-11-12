@@ -43,6 +43,8 @@ export type Materials = {
   // Handwritten notes as WardWise read them from the photos.
   notes: string | null
   warnings: string[]
+  // What the server took out before sending the text, such as ["2 names", "1 number"].
+  removed?: string[]
 }
 
 // Mirrors StudyPack in backend/app/schemas.py. `grounded` is WardWise's check that the quote is really in the material.
