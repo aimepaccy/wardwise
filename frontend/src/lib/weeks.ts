@@ -41,7 +41,10 @@ export function unlocksAt(week: Week) {
   return new Date(friday.getFullYear(), friday.getMonth(), friday.getDate(), UNLOCK_HOUR)
 }
 
+// Demo branch only: with VITE_DEMO_WEEK_OVER=1 the current week counts as over, so its highlights can be
+// shown before Friday 18:00. Never merged into main.
 export function isOver(week: Week, now: Date) {
+  if (import.meta.env.VITE_DEMO_WEEK_OVER === '1' && week.start <= now) return true
   return now >= unlocksAt(week)
 }
 
