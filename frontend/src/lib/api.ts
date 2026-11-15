@@ -1,3 +1,4 @@
+import { accessCode, announceCodeNeeded, forgetCode } from '@/lib/access'
 import type { SavedPack } from '@/lib/storage'
 import type { HighlightsRequest, JobCreated, JobState, Limits, Materials, NotePhoto, Reading, Recording } from '@/types'
 
@@ -29,16 +30,35 @@ export class ApiError extends Error {
 const SLOW_UPLOAD = 'WardWise took too long to answer. Check your connection, or send fewer or smaller files.'
 
 async function request<T>(path: string, init: RequestInit, timeoutMs: number, slowMessage = SLOW_UPLOAD): Promise<T> {
-  let response: Response
+  const sent = accessCode()
+  const response = await send(path, init, timeoutMs, slowMessage, sent)
+  // The code is missing, wrong, or was changed on the server: ask for it again. Only if it is still the code
+  // this request carried, so a late refusal does not erase a new, checked code the student has just entered.
+  if (response.status === 401 && accessCode() === sent) {
+    forgetCode()
+    announceCodeNeeded()
+  }
+  if (!response.ok) throw new ApiError(await readError(response), response.status)
+  return response.json()
+}
+
+// Every request carries the access code, if there is one, in a header of its own. A hosted copy checks it
+// before reading anything else; a copy without a code ignores it.
+async function send(path: string, init: RequestInit, timeoutMs: number, slowMessage: string, code: string | null) {
+  const headers = new Headers(init.headers)
+  if (code) headers.set('X-Access-Code', code)
   try {
-    response = await fetch(`${API_URL}${path}`, { ...init, signal: AbortSignal.timeout(timeoutMs) })
+    return await fetch(`${API_URL}${path}`, { ...init, headers, signal: AbortSignal.timeout(timeoutMs) })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'TimeoutError') throw new ApiError(slowMessage)
     throw new ApiError('WardWise could not reach its server. Check that it is running, then try again.')
   }
+}
 
+// Checks a code without keeping it: resolves if the server accepts it, otherwise throws the server's reason.
+export async function checkCode(code: string): Promise<void> {
+  const response = await send('/api/access', {}, CHECK_TIMEOUT_MS, SLOW_UPLOAD, code)
   if (!response.ok) throw new ApiError(await readError(response), response.status)
-  return response.json()
 }
 
 export function sendSession(recording: Recording | null, photos: NotePhoto[]): Promise<JobCreated> {

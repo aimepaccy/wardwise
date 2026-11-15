@@ -11,6 +11,7 @@ import tempfile
 import threading
 import time
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -111,9 +112,18 @@ def _forget_old() -> None:
     sweep_folders(older_than_seconds=RESULT_TTL_SECONDS)
 
 
-def _read_photos(photos: list[PhotoInput], warnings: list[str]) -> str | None:
+def active() -> int:
+    """Jobs waiting to start or still working, across everyone."""
+    with _lock:
+        return sum(1 for job in _jobs.values() if job.state.status in ('queued', 'working'))
+
+
+def _read_photos(photos: list[PhotoInput], warnings: list[str], on_step: Callable[[str], None] = lambda step: None) -> str | None:
     pages = []
-    for photo in photos:
+    for number, photo in enumerate(photos, start=1):
+        # The free tier lets about one photo through every 20 seconds, so five take over a minute: show progress.
+        if len(photos) > 1:
+            on_step(f'Reading your handwritten notes (photo {number} of {len(photos)})')
         try:
             jpeg = extract.photo_for_reading(photo.path)
         except extract.UnreadableFile:
@@ -142,7 +152,7 @@ def run(job_id: str, work: JobInput) -> None:
         notes = None
         if work.photos:
             _update(job_id, status='working', step='Reading your handwritten notes')
-            notes = _read_photos(work.photos, warnings)
+            notes = _read_photos(work.photos, warnings, on_step=lambda step: _update(job_id, step=step))
 
         transcript = None
         if work.audio is not None and work.audio_kind is not None:
@@ -228,7 +238,9 @@ def _fail(job_id: str, error: Exception, fallback: str) -> None:
             cause = cause.__cause__
         status = getattr(cause, 'status_code', '-')
         code = getattr(cause, 'code', '-')
-        log.warning('Job %s: provider failed (%s, status %s, code %s)', job_id, type(cause).__name__, status, code)
+        # A model the provider no longer offers needs the operator, not a retry, so it is logged as an error.
+        level = logging.ERROR if isinstance(error, providers.ModelUnavailable) else logging.WARNING
+        log.log(level, 'Job %s: provider failed (%s, status %s, code %s)', job_id, type(cause).__name__, status, code)
         _update(job_id, status='failed', step='Failed', error=str(error))
     else:
         log.error('Job %s failed', job_id, exc_info=error)

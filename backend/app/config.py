@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     youtube_api_key: SecretStr = SecretStr('')
     ncbi_api_key: SecretStr = SecretStr('')
 
+    # Protection for a hosted copy. Without a code, none is asked for (as on the developer's own computer).
+    access_code: SecretStr = SecretStr('')
+    # Per address, in any one hour: requests that start AI work, and further reading searches. 0 means no limit.
+    jobs_per_hour: int = 40
+    reading_per_hour: int = 120
+    # The most jobs in progress at once, across everyone; more are turned away as busy. 0 means no limit.
+    max_active_jobs: int = 4
+
     @property
     def transcription_provider(self) -> tuple[str, str]:
         base_url = self.transcribe_base_url or self.llm_base_url

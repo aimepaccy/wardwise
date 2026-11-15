@@ -33,6 +33,8 @@ export type Limits = {
   max_pack_chars: number
   // Up to this, a pack is written in under a minute; longer sessions are condensed first and take minutes.
   quick_pack_chars: number
+  // A hosted copy asks for an access code before any AI work.
+  access_required: boolean
 }
 
 // How much text a study pack would be written from, in characters (as the server measures it).

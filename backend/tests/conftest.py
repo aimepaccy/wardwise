@@ -8,6 +8,11 @@ os.environ['MAX_REQUEST_MB'] = '110'
 # No real key, so no test can ever reach the AI provider.
 os.environ['LLM_API_KEY'] = ''
 os.environ['TRANSCRIBE_API_KEY'] = ''
+# The whole suite comes from one address, so the guard's limits are off here; test_guard.py tests them alone.
+os.environ['ACCESS_CODE'] = ''
+os.environ['JOBS_PER_HOUR'] = '0'
+os.environ['READING_PER_HOUR'] = '0'
+os.environ['MAX_ACTIVE_JOBS'] = '0'
 
 FAKE_TRANSCRIPT = 'Wheeze is a sign of narrowed airways.'
 

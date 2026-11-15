@@ -31,6 +31,8 @@ uvicorn app.main:app --reload --port 8000
 ```
 Before starting the server, put your AI provider key in `.env` as `LLM_API_KEY`. Two keys are optional: `YOUTUBE_API_KEY` (a free YouTube Data API v3 key; without it, videos are left out) and `NCBI_API_KEY` (faster PubMed and StatPearls lookups). The API answers at http://localhost:8000, with interactive documentation at http://localhost:8000/docs. Run the tests with `pytest`.
 
+A copy hosted for others should set `ACCESS_CODE` in `.env`: the page then asks for the code once, each address gets an hourly limit, and the documentation pages are switched off. The limits are set in `.env` too; see `.env.example`.
+
 Front end (needs Node 24):
 ```
 cd frontend

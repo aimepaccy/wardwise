@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { MotionConfig, motion } from 'motion/react'
+import { AccessGate } from '@/components/AccessGate'
 import { AskDock } from '@/components/ask/AskDock'
 import { Background } from '@/components/Background'
 import { GenerateBar } from '@/components/GenerateBar'
@@ -333,6 +334,7 @@ export default function App() {
             </p>
           </footer>
         </motion.main>
+        <AccessGate required={limits?.access_required ?? false} />
       </TooltipProvider>
     </MotionConfig>
   )

@@ -370,3 +370,5 @@ class Limits(BaseModel):
     max_pack_chars: int
     # Up to this, the pack is written in one go (under a minute); longer material is condensed first (minutes).
     quick_pack_chars: int
+    # Whether this server asks for an access code (a hosted copy does), so the page can ask for it first.
+    access_required: bool

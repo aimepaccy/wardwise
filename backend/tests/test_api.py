@@ -61,6 +61,8 @@ def test_limits():
         'max_pack_words': 11491,
         'max_pack_chars': 68950,
         'quick_pack_chars': 9700,
+        # No code is set in the tests, as on the developer's own computer.
+        'access_required': False,
     }
 
 

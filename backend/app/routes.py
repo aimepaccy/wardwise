@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, Uplo
 from fastapi import Path as PathParam
 
 from app import generate, jobs, reading
+from app.config import get_settings
 from app.files import (
     MAX_AUDIO_BYTES,
     MAX_AUDIO_MB,
@@ -49,7 +50,15 @@ def limits() -> Limits:
         max_pack_words=generate.max_words(),
         max_pack_chars=generate.max_chars(),
         quick_pack_chars=generate.quick_chars(),
+        access_required=bool(get_settings().access_code.get_secret_value()),
     )
+
+
+# Lets the page check a code before the student starts work. The guard (guard.py) has already checked the code
+# by the time this runs, so reaching it means the code is right.
+@router.get('/access', status_code=204)
+def check_access() -> None:
+    return None
 
 
 @router.post('/sessions', status_code=202)

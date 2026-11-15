@@ -45,6 +45,26 @@ class PhotoCutShort(UnreadablePhoto):
     """The reply hit its length limit, so the page would come back with its end missing."""
 
 
+class ModelUnavailable(ProviderError):
+    """The provider does not offer the configured model (any more). Retrying cannot help; the settings must change."""
+
+
+# Groq answers 404 `model_not_found` for a model it never had, and 400 `model_decommissioned` for one it retired.
+_MODEL_GONE = {'model_not_found', 'model_decommissioned'}
+
+
+def _model_gone(error: openai.APIError, service: str) -> ModelUnavailable | None:
+    """`service` is a noun, as for `_translate` ("transcription", "photo reading", "writing")."""
+    # A 404 that does not name a model is more likely a wrong address in the settings, not a retired model.
+    named = getattr(error, 'code', None) in _MODEL_GONE
+    if named or (isinstance(error, openai.NotFoundError) and 'model' in str(error.message).lower()):
+        return ModelUnavailable(
+            f'The {service} model WardWise is set to use is no longer available. '
+            'The person running WardWise needs to choose another model in its settings.'
+        )
+    return None
+
+
 def _client(base_url: str, key: str, service: str) -> openai.OpenAI:
     if not key:
         raise ProviderError(f"WardWise's server has no AI key configured, so it cannot {service} yet.")
@@ -54,6 +74,8 @@ def _client(base_url: str, key: str, service: str) -> openai.OpenAI:
 
 def _translate(error: openai.APIError, service: str) -> ProviderError:
     """Turn a technical failure into words for the student. The cause stays attached for the log."""
+    if gone := _model_gone(error, service):
+        return gone
     if isinstance(error, openai.AuthenticationError):
         return ProviderError(f"The {service} service did not accept WardWise's key.")
     if isinstance(error, openai.RateLimitError):
@@ -80,7 +102,7 @@ def transcribe(audio: Path, kind: str) -> str:
                 response_format='text',
             )
     except openai.BadRequestError as error:
-        raise ProviderError('The transcription service could not read this recording.') from error
+        raise _model_gone(error, 'transcription') or ProviderError('The transcription service could not read this recording.') from error
     except openai.APIError as error:
         raise _translate(error, 'transcription') from error
     return str(text).strip()
@@ -107,7 +129,8 @@ def read_handwriting(jpeg: bytes) -> str:
             max_tokens=2000,
         )
     except openai.BadRequestError as error:
-        raise UnreadablePhoto('The photo reading service could not read this photo.') from error
+        # A retired model would turn down every photo, so it fails the job instead of warning photo by photo.
+        raise _model_gone(error, 'photo reading') or UnreadablePhoto('The photo reading service could not read this photo.') from error
     except openai.APIError as error:
         raise _translate(error, 'photo reading') from error
     choice = response.choices[0]
@@ -157,6 +180,8 @@ def write_json(
             **extra,
         )
     except openai.BadRequestError as error:
+        if gone := _model_gone(error, 'writing'):
+            raise gone from error
         # Groq answers 400 with this code when the model's output breaks the form: worth another try.
         if error.code == 'json_validate_failed':
             raise InvalidOutput('The AI wrote something WardWise could not use.') from error
